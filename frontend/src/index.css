@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: var(--color-slate-50);
+    color: var(--color-slate-900);
+  }
+}
+
+@theme {
+  --color-restaurant-primary: #059669;
+  --color-restaurant-secondary: #d97706;
+  --color-restaurant-dark: #1e293b;
+  --color-restaurant-light: #f8fafc;
+}

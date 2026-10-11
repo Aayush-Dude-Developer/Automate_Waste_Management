@@ -159,3 +159,7 @@ def record_handover(restaurant_id: str, handover: HandoverRecord) -> HandoverRes
     db.add_document(f"restaurants/{restaurant_id}/donation_handovers", record_id, doc_data)
     
     return HandoverResponse(**doc_data)
+
+def get_handovers(restaurant_id: str) -> List[HandoverResponse]:
+    docs = db.get_collection(f"restaurants/{restaurant_id}/donation_handovers")
+    return [HandoverResponse(**doc) for doc in docs]

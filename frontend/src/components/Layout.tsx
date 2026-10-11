@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -67,8 +67,8 @@ export default function Layout({ children }: LayoutProps) {
               T
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-slate-700">Taiken Kharadi</p>
-              <p className="text-xs text-slate-500">Demo Mode</p>
+              <p className="text-sm font-medium text-slate-700">Authorized workspace</p>
+              <p className="text-xs text-slate-500">Workspace</p>
             </div>
           </div>
         </div>

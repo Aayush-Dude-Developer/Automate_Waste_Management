@@ -1,84 +1,119 @@
-import { useState, useEffect } from 'react';
-import { ShoppingCart, TrendingUp, PackagePlus, AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { PackagePlus } from 'lucide-react';
+import { apiRequest, type InventoryItem, type ReorderRecommendation } from '../lib/api';
+
+interface PlanningInputs { dailyDemand: string; leadDays: string; packSize: string }
 
 export default function SalesPurchasesView() {
-  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [inputs, setInputs] = useState<Record<string, PlanningInputs>>({});
+  const [recommendations, setRecommendations] = useState<Record<string, ReorderRecommendation>>({});
+  const [busyId, setBusyId] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
-  useEffect(() => {
-    // Simulated API response from /api/planning/replenishment
-    setRecommendations([
-      {
-        item_name: 'Chicken Leg',
-        current_stock: 1.2,
-        target_stock_level: 15.0,
-        recommended_purchase_quantity: 14.0,
-        recommended_packs: 2,
-        pack_size: 7,
-        unit: 'kg',
-        data_quality_status: 'HIGH',
-        reasoning: 'Target stock is 15.0 kg based on lead time. On hand is 1.2 kg. Ordering 2 packs of 7 kg yields 14.0 kg.'
-      },
-      {
-        item_name: 'Sona Masoori Rice',
-        current_stock: 8.0,
-        target_stock_level: 25.0,
-        recommended_purchase_quantity: 20.0,
-        recommended_packs: 1,
-        pack_size: 20,
-        unit: 'kg',
-        data_quality_status: 'HIGH',
-        reasoning: 'Target stock is 25.0 kg. On hand is 8.0 kg. Ordering 1 pack of 20 kg yields 20.0 kg.'
-      }
-    ]);
+  const loadItems = useCallback(async () => {
+    try {
+      const inventory = await apiRequest<InventoryItem[]>('/api/inventory/items');
+      setItems(inventory);
+      setInputs((existing) => {
+        const next = { ...existing };
+        inventory.forEach((item) => {
+          next[item.id] ??= { dailyDemand: '', leadDays: '1', packSize: '1' };
+        });
+        return next;
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not load inventory.');
+    }
   }, []);
 
-  return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Sales & Purchasing</h1>
-      </div>
+  useEffect(() => { void Promise.resolve().then(loadItems); }, [loadItems]);
 
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 mb-8 overflow-hidden">
-        <div className="p-4 border-b border-slate-200 flex items-center bg-slate-50">
-          <PackagePlus className="w-5 h-5 text-restaurant-secondary mr-2" />
-          <h2 className="text-lg font-semibold text-slate-800">Automated Restocking Recommendations</h2>
-        </div>
-        
-        <div className="divide-y divide-slate-200">
-          {recommendations.map((rec, idx) => (
-            <div key={idx} className="p-6 hover:bg-slate-50 transition-colors flex flex-col md:flex-row gap-6">
-              <div className="flex-1">
-                <div className="flex items-center mb-2">
-                  <h3 className="text-lg font-bold text-slate-900 mr-3">{rec.item_name}</h3>
-                  {rec.data_quality_status === 'HIGH' && (
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">High Confidence</span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mb-4">{rec.reasoning}</p>
-                <div className="flex gap-6 text-sm">
-                  <div>
-                    <span className="text-slate-500 block mb-1">Current Stock</span>
-                    <span className="font-semibold text-slate-700">{rec.current_stock} {rec.unit}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block mb-1">Target Stock</span>
-                    <span className="font-semibold text-slate-700">{rec.target_stock_level} {rec.unit}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 w-full md:w-64 flex flex-col justify-center items-center text-center">
-                <span className="text-sm font-medium text-amber-800 mb-1">Recommended Order</span>
-                <span className="text-3xl font-bold text-amber-600 mb-1">{rec.recommended_purchase_quantity} <span className="text-lg">{rec.unit}</span></span>
-                <span className="text-xs text-amber-700 mb-4">({rec.recommended_packs} packs of {rec.pack_size}{rec.unit})</span>
-                <button className="w-full bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 font-medium text-sm transition-colors">
-                  Add to Purchase Order
-                </button>
-              </div>
+  const updateInput = (itemId: string, field: keyof PlanningInputs, value: string) => {
+    setInputs((current) => ({ ...current, [itemId]: { ...current[itemId], [field]: value } }));
+  };
+
+  const calculate = async (item: InventoryItem) => {
+    const itemInputs = inputs[item.id];
+    if (!itemInputs || !itemInputs.dailyDemand || Number(itemInputs.dailyDemand) < 0) {
+      setError(`Enter a valid daily demand forecast for ${item.item_name}.`);
+      return;
+    }
+    setBusyId(item.id);
+    setError('');
+    setNotice('');
+    try {
+      const result = await apiRequest<ReorderRecommendation>('/api/planning/replenishment', {
+        method: 'POST',
+        body: JSON.stringify({
+          item_id: item.id,
+          daily_demand_forecast: Number(itemInputs.dailyDemand),
+          lead_time_days: Number(itemInputs.leadDays),
+          safety_stock: item.safety_stock,
+          pack_size: Number(itemInputs.packSize),
+        }),
+      });
+      setRecommendations((current) => ({ ...current, [item.id]: { ...result, unit: item.base_unit, item_id: item.id, pack_size: Number(itemInputs.packSize) } }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not calculate a replenishment recommendation.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const recordReceipt = async (item: InventoryItem, recommendation: ReorderRecommendation) => {
+    if (recommendation.recommended_purchase_quantity <= 0) {
+      setNotice('The recommendation is zero; there is no stock to receive.');
+      return;
+    }
+    setBusyId(item.id);
+    setError('');
+    setNotice('');
+    try {
+      await apiRequest('/api/inventory/movements', {
+        method: 'POST',
+        body: JSON.stringify({
+          item_id: item.id,
+          movement_type: 'RECEIPT_PURCHASE',
+          quantity_delta: recommendation.recommended_purchase_quantity,
+          unit: item.base_unit,
+          notes: 'Stock receipt recorded from replenishment recommendation',
+        }),
+      });
+      setNotice(`Recorded receipt of ${recommendation.recommended_purchase_quantity} ${item.base_unit} for ${item.item_name}.`);
+      await loadItems();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not record received stock.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  return <div className="p-8">
+    <div className="mb-6"><h1 className="text-2xl font-bold text-slate-800">Sales & Purchasing</h1><p className="mt-1 text-sm text-slate-500">Generate purchase guidance from live stock and your demand estimates.</p></div>
+    {error && <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+    {notice && <div role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
+    <div className="mb-8 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-center border-b bg-slate-50 p-4"><PackagePlus className="mr-2 h-5 w-5 text-restaurant-secondary" /><h2 className="text-lg font-semibold text-slate-800">Replenishment Recommendations</h2></div>
+      {items.length === 0 ? <p className="p-6 text-sm text-slate-500">No inventory items are available. Add items in Inventory before calculating recommendations.</p> :
+        <div className="divide-y divide-slate-200">{items.map((item) => {
+          const recommendation = recommendations[item.id];
+          const itemInputs = inputs[item.id] ?? { dailyDemand: '', leadDays: '1', packSize: '1' };
+          return <section key={item.id} className="p-6">
+            <h3 className="mb-4 text-lg font-bold text-slate-900">{item.item_name} <span className="text-sm font-normal text-slate-500">({item.total_current_quantity} {item.base_unit} on hand)</span></h3>
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="text-xs font-medium text-slate-600">Expected daily demand ({item.base_unit})<input type="number" min="0" step="any" value={itemInputs.dailyDemand} onChange={(e) => updateInput(item.id, 'dailyDemand', e.target.value)} className="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-medium text-slate-600">Supplier lead time (days)<input type="number" min="0" step="1" value={itemInputs.leadDays} onChange={(e) => updateInput(item.id, 'leadDays', e.target.value)} className="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-medium text-slate-600">Pack size ({item.base_unit})<input type="number" min="0.01" step="any" value={itemInputs.packSize} onChange={(e) => updateInput(item.id, 'packSize', e.target.value)} className="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" /></label>
             </div>
-          ))}
-        </div>
-      </div>
+            <button disabled={busyId === item.id} onClick={() => void calculate(item)} className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{busyId === item.id ? 'Working…' : 'Calculate recommendation'}</button>
+            {recommendation && <div className="mt-4 flex flex-col justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 md:flex-row md:items-center">
+              <div><p className="font-semibold text-amber-900">Recommended: {recommendation.recommended_purchase_quantity} {item.base_unit} ({recommendation.recommended_packs} packs)</p><p className="mt-1 text-sm text-amber-800">{recommendation.reasoning}</p><p className="mt-1 text-xs text-amber-700">Target: {recommendation.target_stock_level} {item.base_unit} · {recommendation.data_quality_status} data quality</p></div>
+              <button disabled={busyId === item.id || recommendation.recommended_purchase_quantity <= 0} onClick={() => void recordReceipt(item, recommendation)} className="shrink-0 rounded-md bg-amber-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Record received stock</button>
+            </div>}
+          </section>;
+        })}</div>}
     </div>
-  );
+  </div>;
 }

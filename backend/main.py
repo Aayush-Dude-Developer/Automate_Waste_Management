@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import health, inventory, waste, documents, planning, ai, donations, analytics
+from .routers import auth, health, inventory, waste, documents, planning, ai, donations, analytics
 
 app = FastAPI(
     title="SustainBite / Taiken Ops API",
@@ -11,12 +11,13 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the frontend domain
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(health.router)
 app.include_router(inventory.router)
 app.include_router(waste.router)

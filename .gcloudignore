@@ -1,0 +1,13 @@
+.gcloudignore
+.git
+.git/**
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+**/.venv/**
+**/__pycache__/**
+**/*.py[cod]
+backend/local_db.json
+frontend/node_modules/**
+frontend/dist/**

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.8-flash"
     DEFAULT_RESTAURANT_ID: str = "taiken_kharadi"
+    ALLOWED_USER_EMAILS: str = ""
     
     class Config:
         env_file = ".env" if os.path.exists(".env") else "../.env"

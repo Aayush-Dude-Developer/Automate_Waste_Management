@@ -13,7 +13,7 @@ def create_inventory_item(restaurant_id: str, item: InventoryItemCreate) -> Inve
         "id": item_id,
         "restaurant_id": restaurant_id,
         "total_current_quantity": item.current_quantity_in_store + item.current_quantity_in_use,
-        "status": "in_stock",
+        "status": "reorder_recommended" if item.current_quantity_in_store + item.current_quantity_in_use <= item.reorder_threshold else "in_stock",
         "updated_at": now.isoformat()
     })
     
@@ -44,6 +44,8 @@ def record_stock_movement(restaurant_id: str, movement: StockMovementCreate, use
         raise ValueError(f"Inventory item {movement.item_id} not found")
         
     balance_after = item.total_current_quantity + movement.quantity_delta
+    if balance_after < 0:
+        raise ValueError("Stock movement would make inventory quantity negative.")
     
     doc_data = movement.model_dump()
     doc_data.update({

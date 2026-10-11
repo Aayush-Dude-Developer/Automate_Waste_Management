@@ -1,18 +1,22 @@
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List
+from ..auth import get_restaurant_id
 from ..schemas.inventory import InventoryItemCreate, InventoryItemResponse, StockMovementCreate, StockMovementResponse
 from ..services import inventory_service
 
 router = APIRouter(prefix="/api/inventory", tags=["Inventory"])
 
 @router.post("/items", response_model=InventoryItemResponse)
-def create_item(item: InventoryItemCreate, x_restaurant_id: str = Header(default="taiken_kharadi")):
-    return inventory_service.create_inventory_item(x_restaurant_id, item)
+def create_item(item: InventoryItemCreate, restaurant_id: str = Depends(get_restaurant_id)):
+    return inventory_service.create_inventory_item(restaurant_id, item)
 
 @router.get("/items", response_model=List[InventoryItemResponse])
-def get_items(x_restaurant_id: str = Header(default="taiken_kharadi")):
-    return inventory_service.get_inventory_items(x_restaurant_id)
+def get_items(restaurant_id: str = Depends(get_restaurant_id)):
+    return inventory_service.get_inventory_items(restaurant_id)
 
 @router.post("/movements", response_model=StockMovementResponse)
-def add_movement(movement: StockMovementCreate, x_restaurant_id: str = Header(default="taiken_kharadi")):
-    return inventory_service.record_stock_movement(x_restaurant_id, movement, user="api_user")
+def add_movement(movement: StockMovementCreate, restaurant_id: str = Depends(get_restaurant_id)):
+    try:
+        return inventory_service.record_stock_movement(restaurant_id, movement, user="api_user")
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error

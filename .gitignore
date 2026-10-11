@@ -1,7 +1,11 @@
 .env
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 backend/.venv/
 backend/**/__pycache__/
 backend/**/*.py[cod]
 backend/local_db.json
 frontend/node_modules/
 frontend/dist/
+frontend/.venv/

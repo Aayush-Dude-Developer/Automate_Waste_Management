@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List
+from ..auth import get_restaurant_id
 from ..schemas.planning import ReorderRecommendation, ReorderRequest, BuffetProductionRequest, BuffetProductionRecommendation
 from ..engines.forecasting_engine import calculate_reorder_quantity
 from ..engines.buffet_engine import calculate_buffet_production
@@ -10,9 +11,9 @@ router = APIRouter(prefix="/api/planning", tags=["Planning & Forecasting"])
 @router.post("/replenishment", response_model=ReorderRecommendation)
 def get_replenishment_recommendation(
     request: ReorderRequest,
-    x_restaurant_id: str = Header(default="taiken_kharadi")
+    restaurant_id: str = Depends(get_restaurant_id)
 ):
-    item = get_inventory_item(x_restaurant_id, request.item_id)
+    item = get_inventory_item(restaurant_id, request.item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -31,7 +32,7 @@ def get_replenishment_recommendation(
 @router.post("/buffet", response_model=BuffetProductionRecommendation)
 def get_buffet_production_plan(
     request: BuffetProductionRequest,
-    x_restaurant_id: str = Header(default="taiken_kharadi")
+    restaurant_id: str = Depends(get_restaurant_id)
 ):
     result = calculate_buffet_production(
         dish_name=request.dish_name,

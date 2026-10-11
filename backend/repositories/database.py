@@ -75,8 +75,7 @@ def get_db():
         try:
             return FirestoreDatabase()
         except Exception as e:
-            print(f"Warning: Failed to initialize Firestore ({e}). Falling back to Local DB.")
-            return LocalDatabase()
+            raise RuntimeError("Firestore is configured but could not be initialized.") from e
     else:
         return LocalDatabase()
 

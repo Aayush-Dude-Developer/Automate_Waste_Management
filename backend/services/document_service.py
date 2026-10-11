@@ -1,48 +1,54 @@
 import uuid
 import hashlib
-from typing import Dict, Any
-from ..schemas.documents import ExtractionPreviewResponse
+from ..schemas.documents import ExtractionPreviewResponse, ConfirmImportRequest
+from ..schemas.inventory import InventoryItemCreate
+from ..schemas.waste import WasteRecordCreate, StaffMealRecordCreate
 from ..repositories.database import db
+from . import inventory_service, waste_service
 
 def hash_file_content(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
-def process_document_upload(content: bytes, filename: str, hint: str = None) -> ExtractionPreviewResponse:
+def process_document_upload(content: bytes, filename: str, hint: str = None, restaurant_id: str = "taiken_kharadi") -> ExtractionPreviewResponse:
     doc_id = f"doc_{uuid.uuid4().hex[:12]}"
     file_hash = hash_file_content(content)
-    
-    # Check for duplicates in DB
-    existing_docs = db.get_collection("documents")
+    collection_path = f"restaurants/{restaurant_id}/documents"
+    existing_docs = db.get_collection(collection_path)
     is_duplicate = any(d.get("hash") == file_hash for d in existing_docs)
-    
-    # In Phase 5, this will call Gemini Multimodal OCR
-    # For Phase 3, we mock the extraction based on the hint
-    extracted = []
-    ambiguous = []
-    
-    if hint == "waste":
-        extracted = [
-            {"date": "2026-08-02", "item_name": "chinese noodles", "quantity": 400, "unit": "grm", "reason": "Broken", "checked_by": "Ritesh"}
-        ]
-    elif hint == "staff_meals":
-        extracted = [
-            {"date": "2026-09-29", "shift": "Lunch", "ingredient_name": "Rice", "quantity": 150, "unit": "gm"}
-        ]
-        ambiguous = ["Rice (150 gm for 13 people might be 1.5 kg)"]
-        
-    # Store document metadata
-    db.add_document("documents", doc_id, {
+    db.add_document(collection_path, doc_id, {
         "id": doc_id,
         "filename": filename,
         "hash": file_hash,
-        "status": "pending_review"
+        "status": "ocr_unavailable"
     })
     
     return ExtractionPreviewResponse(
         document_id=doc_id,
         document_type_hint=hint,
-        extracted_records=extracted,
-        confidence_score=0.85 if not ambiguous else 0.65,
-        ambiguous_fields=ambiguous,
-        duplicate_warning=is_duplicate
+        extracted_records=[],
+        confidence_score=0.0,
+        ambiguous_fields=["Automatic OCR is not implemented; no records were extracted."],
+        duplicate_warning=is_duplicate,
+        message="The file was received, but automatic OCR is not available yet. Nothing was imported."
     )
+
+def confirm_document_import(restaurant_id: str, request: ConfirmImportRequest) -> int:
+    model_by_target = {
+        "waste_records": WasteRecordCreate,
+        "staff_meal_records": StaffMealRecordCreate,
+        "inventory_items": InventoryItemCreate,
+    }
+    model = model_by_target.get(request.target_entity)
+    if model is None:
+        raise ValueError(f"Unsupported import target: {request.target_entity}")
+    records = [model(**record) for record in request.confirmed_records]
+    if request.target_entity == "waste_records":
+        for record in records:
+            waste_service.log_waste_record(restaurant_id, record)
+    elif request.target_entity == "staff_meal_records":
+        for record in records:
+            waste_service.log_staff_meal(restaurant_id, record)
+    else:
+        for record in records:
+            inventory_service.create_inventory_item(restaurant_id, record)
+    return len(records)

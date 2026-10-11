@@ -9,6 +9,7 @@ class ExtractionPreviewResponse(BaseModel):
     confidence_score: float
     ambiguous_fields: List[str]
     duplicate_warning: bool
+    message: str = ""
 
 class ConfirmImportRequest(BaseModel):
     document_id: str

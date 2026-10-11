@@ -53,7 +53,10 @@ class FirestoreDatabase:
     """Actual Google Cloud Firestore implementation placeholder."""
     def __init__(self):
         from google.cloud import firestore
-        self.db = firestore.Client()
+        self.db = firestore.Client(
+            project=settings.GOOGLE_CLOUD_PROJECT,
+            database="default",
+        )
         
     def add_document(self, collection_path: str, document_id: str, data: Dict[str, Any]):
         self.db.collection(collection_path).document(document_id).set(data)

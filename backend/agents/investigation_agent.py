@@ -1,6 +1,5 @@
-import os
+import json
 import uuid
-from typing import Dict, Any
 from ..schemas.ai import SurplusInvestigationResponse, InterventionProposal
 from ..config import settings
 from .tools import get_inventory_status, get_recent_waste_history, check_donation_eligibility
@@ -31,31 +30,89 @@ def run_surplus_investigation(restaurant_id: str, item_id: str, item_name: str) 
             Donation Rules: {donation_rule}
             
             Your job is to analyze why this item is at risk of surplus/waste and recommend interventions.
-            Separate your findings strictly into verified_facts (from the data above), hypotheses, and data_gaps.
+            Use only the supplied data for verified_facts. Do not invent inventory, waste,
+            demand, or donation facts. Return a concise analysis with these JSON fields:
+            investigation_summary, verified_facts, hypotheses, data_gaps, and
+            recommended_interventions. Each intervention must include intervention_id,
+            action_type, title, details, expected_impact_inr, feasibility_rating, and
+            requires_manager_approval.
             """
             
-            response = client.models.generate_content(
+            response = client.interactions.create(
                 model=settings.GEMINI_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    # Schema matches SurplusInvestigationResponse roughly
-                )
+                input=prompt,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "investigation_summary": {"type": "string"},
+                            "verified_facts": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "hypotheses": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "data_gaps": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "recommended_interventions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "intervention_id": {"type": "string"},
+                                        "action_type": {"type": "string"},
+                                        "title": {"type": "string"},
+                                        "details": {"type": "string"},
+                                        "expected_impact_inr": {"type": "number"},
+                                        "feasibility_rating": {"type": "string"},
+                                        "requires_manager_approval": {
+                                            "type": "boolean"
+                                        },
+                                    },
+                                    "required": [
+                                        "intervention_id",
+                                        "action_type",
+                                        "title",
+                                        "details",
+                                        "expected_impact_inr",
+                                        "feasibility_rating",
+                                        "requires_manager_approval",
+                                    ],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": [
+                            "investigation_summary",
+                            "verified_facts",
+                            "hypotheses",
+                            "data_gaps",
+                            "recommended_interventions",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
             )
-            import json
-            data = json.loads(response.text)
+            data = json.loads(response.output_text)
             
-            # Map back to our schema (simplified for reliability here)
             investigation_id = f"inv_{uuid.uuid4().hex[:12]}"
+            current_qty = inv_status.get("total_current_quantity", 0)
+            cost = inv_status.get("unit_cost_inr", 0)
             
             result = SurplusInvestigationResponse(
                 id=investigation_id,
                 target_item_name=item_name,
-                investigation_summary=data.get("investigation_summary", "Agent analysis completed."),
-                verified_facts=data.get("verified_facts", []),
-                hypotheses=data.get("hypotheses", []),
-                data_gaps=data.get("data_gaps", []),
-                financial_risk_inr=float(data.get("financial_risk_inr", 0.0)),
+                investigation_summary=data["investigation_summary"],
+                verified_facts=data["verified_facts"],
+                hypotheses=data["hypotheses"],
+                data_gaps=data["data_gaps"],
+                financial_risk_inr=float(current_qty * cost),
                 recommended_interventions=[InterventionProposal(**i) for i in data.get("recommended_interventions", [])]
             )
             

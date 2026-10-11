@@ -50,12 +50,13 @@ gcloud projects add-iam-policy-binding automate-511215 --member="serviceAccount:
 Do not download or create a service-account key file. Cloud Run provides
 credentials to the attached service account.
 
-## 3. Store the Gemini key in Secret Manager
+## 3. (Optional) Store the Gemini key in Secret Manager
 
-Create a secret named `GEMINI_API_KEY` in Secret Manager and add its value as a
-secret version through the Google Cloud Console. Do not put the Gemini key in
-this repository, a frontend `VITE_` variable, or a command saved in shell
-history.
+Without a Gemini key, the app uses deterministic recommendations. If Gemini is
+needed, create a secret named `GEMINI_API_KEY` in Secret Manager and add its
+value as a secret version through the Google Cloud Console. Do not put the
+Gemini key in this repository, a frontend `VITE_` variable, or a command saved
+in shell history.
 
 Allow the runtime service account to read the secret:
 
@@ -84,8 +85,23 @@ In the Firebase Console for `automate-511215`:
 From the project root:
 
 ```powershell
-gcloud run deploy sustainbite-api --source . --project automate-511215 --region asia-south1 --service-account sustainbite-runtime@automate-511215.iam.gserviceaccount.com --allow-unauthenticated --set-env-vars "ENVIRONMENT=production,DATABASE_BACKEND=firestore,GOOGLE_CLOUD_PROJECT=automate-511215,GEMINI_MODEL=gemini-3.8-flash,DEFAULT_RESTAURANT_ID=taiken_kharadi,ALLOWED_USER_EMAILS=owner@example.com,friend@example.com" --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest"
+$envVars = @{
+  ENVIRONMENT = "production"
+  DATABASE_BACKEND = "firestore"
+  GOOGLE_CLOUD_PROJECT = "automate-511215"
+  GEMINI_MODEL = "gemini-3.8-flash"
+  DEFAULT_RESTAURANT_ID = "taiken_kharadi"
+  ALLOWED_USER_EMAILS = "owner@example.com,friend@example.com"
+}
+$envFile = Join-Path $env:TEMP "sustainbite-cloudrun-env.json"
+$envVars | ConvertTo-Json | Set-Content -Path $envFile -Encoding utf8
+gcloud builds submit --project automate-511215 --region asia-south1 --tag asia-south1-docker.pkg.dev/automate-511215/cloud-run-source-deploy/sustainbite-api:latest --ignore-file .gcloudignore .
+gcloud run deploy sustainbite-api --image asia-south1-docker.pkg.dev/automate-511215/cloud-run-source-deploy/sustainbite-api:latest --project automate-511215 --region asia-south1 --service-account sustainbite-runtime@automate-511215.iam.gserviceaccount.com --allow-unauthenticated --max 2 --min 0 --env-vars-file $envFile
+Remove-Item $envFile
 ```
+
+If you created the optional Gemini secret, add
+`--set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest"` to the deploy command.
 
 Replace the example email addresses with the exact Google accounts authorized
 to use the app. Do not deploy with an empty allowlist. Cloud Run's

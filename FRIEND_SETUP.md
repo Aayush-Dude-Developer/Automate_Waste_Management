@@ -50,8 +50,8 @@ Open a second PowerShell terminal at the project root:
 
 ```powershell
 Set-Location .\frontend
-npm install
-npm run dev
+npm.cmd install
+npm.cmd run dev
 ```
 
 Open the local URL printed by Vite, normally <http://localhost:5173>.

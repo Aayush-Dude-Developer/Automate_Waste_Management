@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -9,7 +10,7 @@ class Settings(BaseSettings):
     DEFAULT_RESTAURANT_ID: str = "taiken_kharadi"
     
     class Config:
-        env_file = "../.env"
+        env_file = ".env" if os.path.exists(".env") else "../.env"
         extra = "ignore"
 
 settings = Settings()

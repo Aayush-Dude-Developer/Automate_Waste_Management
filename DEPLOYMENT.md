@@ -358,6 +358,124 @@ cost reports in the console; balances and eligibility can change. Set suitable
 alerts and inspect usage regularly. Budget alerts can arrive late because
 usage reporting is delayed.
 
+## Best-effort quota shutdown
+
+The optional `quota_guard` Cloud Function checks configured Cloud Monitoring
+metrics every five minutes. Its shutdown threshold is configurable with
+`QUOTA_SHUTDOWN_PERCENT` (80 by default). When any configured metric reaches
+that percentage of its configured limit, the guard publishes a minimal blank
+Firebase Hosting release and changes the API service ingress to internal-only.
+This makes new Hosting visits blank and blocks public API access. It does not
+instantly clear already-open browser tabs.
+
+This is deliberately best-effort, not a hard spending cap or comprehensive
+Firebase quota monitor:
+
+- The included defaults watch this project's Firestore daily read/write/delete
+  metrics and this Cloud Run service's monthly request count. The Firestore
+  metrics are project-scoped and include successful operations across its
+  Firestore instances. Edit
+  `quota_guard/limits.json` to change the monitored limits; redeploy the
+  function for changes to take effect.
+- Cloud Run's free request allowance is shared at billing-account level; the
+  included metric filters to this one service and cannot account for other
+  projects on the billing account.
+- Firebase Hosting transfer/storage usage does not have a supported
+  Cloud-Monitoring metric consumed by this guard. It is not automatically
+  watched. Check **Firebase Console → Hosting → Usage** separately.
+- Metrics can be delayed or absent. Missing metric data is logged and skipped,
+  not treated as zero usage. Therefore shutdown can occur late or fail to
+  trigger. Gemini API billing is separate and is not monitored here.
+- The guard, Cloud Scheduler, Cloud Monitoring, and shutdown API calls are
+  additional Google Cloud resources/operations and may have their own costs.
+- The Cloud Run ingress change blocks its public endpoint; a Hosting release
+  serves an empty page on new visits. Requests already in progress and cached
+  pages may persist briefly.
+
+To deploy the guard from the project root, first enable Cloud Monitoring,
+Cloud Scheduler, Cloud Functions, Cloud Run, and Firebase Hosting APIs. Create
+a runtime service account with `roles/monitoring.viewer`, `roles/run.admin`,
+and `roles/firebasehosting.admin` on this project. Also grant the guard
+identity `roles/iam.serviceAccountUser` on the existing
+`sustainbite-runtime` service account; Cloud Run needs this permission to
+update ingress on a service configured with that runtime identity. Create a
+separate scheduler service account and grant it `roles/run.invoker` on the
+function's underlying Cloud Run service.
+These roles allow the guard to read metrics and perform the shutdown; grant
+them only to the dedicated identities.
+
+Example PowerShell setup (review the permissions and current project before
+running):
+
+```powershell
+$project = "automate-511215"
+$region = "asia-south1"
+$runtime = "sustainbite-quota-guard"
+$scheduler = "sustainbite-quota-scheduler"
+
+gcloud services enable monitoring.googleapis.com cloudscheduler.googleapis.com cloudfunctions.googleapis.com run.googleapis.com firebasehosting.googleapis.com --project $project
+gcloud iam service-accounts create $runtime --project $project
+gcloud iam service-accounts create $scheduler --project $project
+gcloud projects add-iam-policy-binding $project --member "serviceAccount:$runtime@$project.iam.gserviceaccount.com" --role roles/monitoring.viewer
+gcloud projects add-iam-policy-binding $project --member "serviceAccount:$runtime@$project.iam.gserviceaccount.com" --role roles/run.admin
+gcloud projects add-iam-policy-binding $project --member "serviceAccount:$runtime@$project.iam.gserviceaccount.com" --role roles/firebasehosting.admin
+gcloud iam service-accounts add-iam-policy-binding "sustainbite-runtime@$project.iam.gserviceaccount.com" --project $project --member "serviceAccount:$runtime@$project.iam.gserviceaccount.com" --role roles/iam.serviceAccountUser
+
+gcloud functions deploy quota-guard `
+  --gen2 `
+  --runtime python312 `
+  --region $region `
+  --source .\quota_guard `
+  --entry-point check_quotas `
+  --trigger-http `
+  --no-allow-unauthenticated `
+  --service-account "$runtime@$project.iam.gserviceaccount.com" `
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=$project,HOSTING_SITE_ID=$project,CLOUD_RUN_SERVICE=sustainbite-api,CLOUD_RUN_REGION=$region,QUOTA_SHUTDOWN_PERCENT=80"
+
+gcloud run services add-iam-policy-binding quota-guard `
+  --region $region `
+  --project $project `
+  --member "serviceAccount:$scheduler@$project.iam.gserviceaccount.com" `
+  --role roles/run.invoker
+
+$functionUrl = gcloud functions describe quota-guard --gen2 --region $region --project $project --format="value(serviceConfig.uri)"
+gcloud scheduler jobs create http quota-guard-every-five-minutes `
+  --location $region `
+  --project $project `
+  --schedule "*/5 * * * *" `
+  --uri $functionUrl `
+  --http-method POST `
+  --oidc-service-account "$scheduler@$project.iam.gserviceaccount.com" `
+  --oidc-token-audience $functionUrl
+```
+
+Set the desired percentage in `QUOTA_SHUTDOWN_PERCENT` (1–100) when deploying.
+The command above uses **80% for the current live configuration**. With
+default limits, that triggers at 40,000 reads/day, 16,000 writes/day, 16,000
+deletes/day, or 1,600,000 requests/month. At the October 13, 2026 check,
+reads were 11,897 and Cloud Run requests were 285; the app was restored for
+continued use below the new threshold.
+The quota ceilings and monitored metrics are configured in
+`quota_guard/limits.json`. Confirm that the metric types emit data in Cloud
+Monitoring before relying on the guard. Monitor function logs and Scheduler
+job status.
+
+To restore service after a shutdown, pause the Scheduler job first. Review
+usage and thresholds, redeploy Hosting with `firebase deploy --only hosting
+--project automate-511215`, then restore public Cloud Run ingress with
+`gcloud run services update sustainbite-api --project automate-511215 --region
+asia-south1 --ingress all`. Resume the Scheduler only after the exceeded
+period has reset or the configured threshold/limit has been deliberately
+adjusted; otherwise it will shut the app down again:
+
+```powershell
+gcloud scheduler jobs pause quota-guard-every-five-minutes --location asia-south1 --project automate-511215
+# Restore Hosting and Cloud Run as described above.
+gcloud scheduler jobs resume quota-guard-every-five-minutes --location asia-south1 --project automate-511215
+```
+For the short recovery checklist, see
+[`quota_guard/README.md`](./quota_guard/README.md).
+
 ## Security and known limitations
 
 - Cloud source uploads exclude the root `.env` and `frontend/.env.local`.

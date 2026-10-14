@@ -9,3 +9,4 @@ backend/local_db.json
 frontend/node_modules/
 frontend/dist/
 frontend/.venv/
+.firebase/

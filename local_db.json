@@ -51,11 +51,11 @@
   "restaurants/taiken_kharadi/profile": [
     {
       "id": "taiken_kharadi",
-      "name": "Taiken Pan Asian",
-      "outlet_name": "Kharadi Outlet",
+      "name": "Straits Garden Kitchen",
+      "outlet_name": "Tanjong Pagar",
       "company_name": "Culinary Divergence Pvt. Ltd.",
       "cuisine_type": "Pan-Asian / Japanese / Thai / Chinese",
-      "timezone": "Asia/Kolkata",
+      "timezone": "Asia/Singapore",
       "currency": "INR",
       "operating_shifts": [
         {
@@ -69,7 +69,10 @@
           "end": "23:30"
         }
       ],
-      "created_at": "2025-10-06T07:48:49.817810+00:00"
+      "created_at": "2025-10-06T07:48:49.817810+00:00",
+      "location": "Tanjong Pagar, Singapore",
+      "address": "Tanjong Pagar, Singapore",
+      "updated_at": "2026-10-11T10:28:18.912293+00:00"
     }
   ],
   "restaurants/taiken_kharadi/inventory_items": [
@@ -90,7 +93,27 @@
       "current_quantity_in_use": 13.5,
       "status": "in_stock",
       "yield_factor": 0.85,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_chicken_leg",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 280.0,
+      "stock_in_store": 31.5,
+      "stock_in_use": 13.5,
+      "yield_percentage": -15.0,
+      "yield_type": "negative",
+      "yield_stage": "trimmed",
+      "yield_stages": [
+        {
+          "stage_name": "trimmed",
+          "input_stage": "raw",
+          "output_stage": "trimmed",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": -15.0
+        }
+      ],
+      "lead_time_days": 0
     },
     {
       "id": "inv_chinese_noodles",
@@ -109,7 +132,27 @@
       "current_quantity_in_use": 18.0,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_chinese_noodles",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 95.0,
+      "stock_in_store": 42.0,
+      "stock_in_use": 18.0,
+      "yield_percentage": 150.0,
+      "yield_type": "positive",
+      "yield_stage": "cooked",
+      "yield_stages": [
+        {
+          "stage_name": "cooked",
+          "input_stage": "raw",
+          "output_stage": "cooked",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": 150.0
+        }
+      ],
+      "lead_time_days": 0
     },
     {
       "id": "inv_jasmine_rice",
@@ -128,7 +171,27 @@
       "current_quantity_in_use": 24.0,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_jasmine_rice",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 160.0,
+      "stock_in_store": 56.0,
+      "stock_in_use": 24.0,
+      "yield_percentage": 100.0,
+      "yield_type": "positive",
+      "yield_stage": "cooked",
+      "yield_stages": [
+        {
+          "stage_name": "cooked",
+          "input_stage": "raw",
+          "output_stage": "cooked",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": 100.0
+        }
+      ],
+      "lead_time_days": 0
     },
     {
       "id": "inv_pak_choi",
@@ -147,7 +210,27 @@
       "current_quantity_in_use": 3.75,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_pak_choi",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 120.0,
+      "stock_in_store": 8.75,
+      "stock_in_use": 3.75,
+      "yield_percentage": -10.0,
+      "yield_type": "negative",
+      "yield_stage": "trimmed",
+      "yield_stages": [
+        {
+          "stage_name": "trimmed",
+          "input_stage": "raw",
+          "output_stage": "trimmed",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": -10.0
+        }
+      ],
+      "lead_time_days": 0
     },
     {
       "id": "inv_dark_soy_sauce",
@@ -166,7 +249,18 @@
       "current_quantity_in_use": 5.4,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_dark_soy_sauce",
+      "input_unit": "ltr",
+      "output_unit": "ltr",
+      "unit_cost": 350.0,
+      "stock_in_store": 12.6,
+      "stock_in_use": 5.4,
+      "yield_percentage": 0.0,
+      "yield_type": "no change",
+      "yield_stage": "no change",
+      "yield_stages": [],
+      "lead_time_days": 0
     },
     {
       "id": "inv_tofu_firm",
@@ -185,7 +279,27 @@
       "current_quantity_in_use": 4.5,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_tofu_firm",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 180.0,
+      "stock_in_store": 10.5,
+      "stock_in_use": 4.5,
+      "yield_percentage": -5.0,
+      "yield_type": "negative",
+      "yield_stage": "drained",
+      "yield_stages": [
+        {
+          "stage_name": "drained",
+          "input_stage": "raw",
+          "output_stage": "drained",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": -5.0
+        }
+      ],
+      "lead_time_days": 0
     },
     {
       "id": "inv_tiger_prawns",
@@ -204,7 +318,27 @@
       "current_quantity_in_use": 6.6,
       "status": "in_stock",
       "yield_factor": 0.85,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_tiger_prawns",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 650.0,
+      "stock_in_store": 15.4,
+      "stock_in_use": 6.6,
+      "yield_percentage": -35.0,
+      "yield_type": "negative",
+      "yield_stage": "peeled",
+      "yield_stages": [
+        {
+          "stage_name": "peeled",
+          "input_stage": "raw",
+          "output_stage": "peeled",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": -35.0
+        }
+      ],
+      "lead_time_days": 0
     },
     {
       "id": "inv_coconut_milk",
@@ -223,7 +357,18 @@
       "current_quantity_in_use": 9.0,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_coconut_milk",
+      "input_unit": "ltr",
+      "output_unit": "ltr",
+      "unit_cost": 210.0,
+      "stock_in_store": 21.0,
+      "stock_in_use": 9.0,
+      "yield_percentage": 0.0,
+      "yield_type": "no change",
+      "yield_stage": "no change",
+      "yield_stages": [],
+      "lead_time_days": 0
     },
     {
       "id": "inv_thai_green_paste",
@@ -242,7 +387,18 @@
       "current_quantity_in_use": 2.4,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_thai_green_paste",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 420.0,
+      "stock_in_store": 5.6,
+      "stock_in_use": 2.4,
+      "yield_percentage": 0.0,
+      "yield_type": "no change",
+      "yield_stage": "no change",
+      "yield_stages": [],
+      "lead_time_days": 0
     },
     {
       "id": "inv_cooking_oil",
@@ -261,7 +417,18 @@
       "current_quantity_in_use": 27.0,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_cooking_oil",
+      "input_unit": "ltr",
+      "output_unit": "ltr",
+      "unit_cost": 140.0,
+      "stock_in_store": 63.0,
+      "stock_in_use": 27.0,
+      "yield_percentage": 0.0,
+      "yield_type": "no change",
+      "yield_stage": "no change",
+      "yield_stages": [],
+      "lead_time_days": 0
     },
     {
       "id": "inv_eggs",
@@ -280,7 +447,18 @@
       "current_quantity_in_use": 75.0,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_eggs",
+      "input_unit": "piece",
+      "output_unit": "piece",
+      "unit_cost": 7.5,
+      "stock_in_store": 175.0,
+      "stock_in_use": 75.0,
+      "yield_percentage": 0.0,
+      "yield_type": "no change",
+      "yield_stage": "no change",
+      "yield_stages": [],
+      "lead_time_days": 0
     },
     {
       "id": "inv_banana_yellow",
@@ -299,7 +477,27 @@
       "current_quantity_in_use": 3.0,
       "status": "in_stock",
       "yield_factor": 1.0,
-      "updated_at": "2026-10-11T07:48:49.817810+00:00"
+      "updated_at": "2026-10-11T07:48:49.817810+00:00",
+      "ingredient_id": "inv_banana_yellow",
+      "input_unit": "kg",
+      "output_unit": "kg",
+      "unit_cost": 50.0,
+      "stock_in_store": 7.0,
+      "stock_in_use": 3.0,
+      "yield_percentage": -35.0,
+      "yield_type": "negative",
+      "yield_stage": "peeled",
+      "yield_stages": [
+        {
+          "stage_name": "peeled",
+          "input_stage": "raw",
+          "output_stage": "peeled",
+          "input_unit": "kg",
+          "output_unit": "kg",
+          "yield_percentage": -35.0
+        }
+      ],
+      "lead_time_days": 0
     }
   ],
   "restaurants/taiken_kharadi/buffet_plans": [
@@ -13401,6 +13599,15 @@
       "financial_loss_inr": 358.2,
       "status": "VERIFIED",
       "created_at": "2026-10-10T07:48:49.817810+00:00"
+    }
+  ],
+  "restaurants/taiken_kharadi/schema_migrations": [
+    {
+      "id": "restaurant_yield_sg_v1",
+      "version": 2,
+      "name": "restaurant_yield_sg_v1",
+      "applied_at": "2026-10-11T10:28:18.936852+00:00",
+      "documents_updated": 12
     }
   ]
 }

@@ -1,4 +1,4 @@
-# Automate_Waste_Management (SustainBite / Taiken Ops)
+# Automate_Waste_Management (SustainBite / Straits Garden Kitchen Ops)
 
 AI-powered food waste management and inventory optimization application.
 

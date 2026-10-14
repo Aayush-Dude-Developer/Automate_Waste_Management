@@ -22,8 +22,8 @@ export default function ImpactReportsView() {
 
   useEffect(() => {
     Promise.all([
-      apiRequest<WasteRecord[]>('/api/waste'),
-      apiRequest<Handover[]>('/api/donations/handovers'),
+      apiRequest<WasteRecord[]>('/api/waste?limit=100'),
+      apiRequest<Handover[]>('/api/donations/handovers?limit=100'),
     ]).then(([wasteRecords, donationHandovers]) => {
       setWaste(wasteRecords);
       setHandovers(donationHandovers);
@@ -32,14 +32,33 @@ export default function ImpactReportsView() {
     }).finally(() => setLoading(false));
   }, []);
 
-  const rows = [
+  const reportRows = (wasteRecords: WasteRecord[], donationHandovers: Handover[]) => [
     ['Record Type', 'Date', 'Item', 'Quantity', 'Unit', 'Reason / Recipient', 'Financial Loss (INR)', 'Status'],
-    ...waste.map((record) => ['Waste', record.date, record.item_name, String(record.quantity), record.unit, record.reason, String(record.financial_loss_inr), 'RECORDED']),
-    ...handovers.map((record) => ['Donation handover', record.timestamp, record.item_name, String(record.quantity_kg), 'kg', record.centre_id, '', record.status]),
+    ...wasteRecords.map((record) => ['Waste', record.date, record.item_name, String(record.quantity), record.unit, record.reason, String(record.financial_loss_inr), 'RECORDED']),
+    ...donationHandovers.map((record) => ['Donation handover', record.timestamp, record.item_name, String(record.quantity_kg), 'kg', record.centre_id, '', record.status]),
   ];
 
+  const rows = reportRows(waste, handovers);
+  const exportFullReport = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [allWaste, allHandovers] = await Promise.all([
+        apiRequest<WasteRecord[]>('/api/waste'),
+        apiRequest<Handover[]>('/api/donations/handovers'),
+      ]);
+      setWaste(allWaste);
+      setHandovers(allHandovers);
+      downloadCsv(reportRows(allWaste, allHandovers));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not export the complete impact report.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return <div className="p-8">
-    <div className="mb-6 flex items-center justify-between"><div><h1 className="text-2xl font-bold text-slate-800">Impact & Sustainability Reports</h1><p className="mt-1 text-sm text-slate-500">Live waste and donation records from this restaurant.</p></div><button disabled={loading || !!error} onClick={() => downloadCsv(rows)} className="flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"><Download className="mr-2 h-4 w-4" />Export CSV</button></div>
+    <div className="mb-6 flex items-center justify-between"><div><h1 className="text-2xl font-bold text-slate-800">Impact & Sustainability Reports</h1><p className="mt-1 text-sm text-slate-500">Latest 100 waste and donation records. Export loads all history.</p></div><button disabled={loading || !!error} onClick={() => void exportFullReport()} className="flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"><Download className="mr-2 h-4 w-4" />Export CSV</button></div>
     {error && <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
     {loading ? <p className="text-slate-500">Loading report data…</p> :
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">

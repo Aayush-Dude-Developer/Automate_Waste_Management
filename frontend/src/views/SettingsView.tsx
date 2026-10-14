@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { firebaseAuth } from '../lib/firebase';
-import { apiRequest } from '../lib/api';
+import { apiRequest, type RestaurantProfile } from '../lib/api';
 
 interface HealthStatus { status: string; database: string; gemini_ready: boolean }
 interface AuthProfile { email: string; restaurant_id: string }
@@ -9,15 +9,18 @@ interface AuthProfile { email: string; restaurant_id: string }
 export default function SettingsView() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
+  const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     Promise.all([
       apiRequest<HealthStatus>('/api/health'),
       apiRequest<AuthProfile>('/api/auth/me'),
-    ]).then(([status, user]) => {
+      apiRequest<RestaurantProfile>('/api/restaurant/profile'),
+    ]).then(([status, user, restaurantProfile]) => {
       setHealth(status);
       setProfile(user);
+      setRestaurant(restaurantProfile);
     }).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'Could not reach the backend.');
     });
@@ -29,7 +32,8 @@ export default function SettingsView() {
     <section className="mb-6 rounded-lg border border-slate-200 bg-white p-6">
       <h2 className="mb-2 text-lg font-semibold text-slate-800">Signed-in account</h2>
       <p className="text-sm text-slate-600">{profile?.email ?? 'Loading account…'}</p>
-      <p className="mt-1 text-xs text-slate-500">Authorized workspace: {profile?.restaurant_id ?? 'Loading…'}</p>
+      <p className="mt-1 text-xs text-slate-500">Restaurant: {restaurant?.name ?? profile?.restaurant_id ?? 'Loading…'}</p>
+      <p className="mt-1 text-xs text-slate-500">Location: {restaurant?.location ?? 'Loading…'}</p>
       <button onClick={() => firebaseAuth && void signOut(firebaseAuth)} className="mt-4 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Sign out</button>
     </section>
     <section className="rounded-lg border border-slate-200 bg-white p-6">

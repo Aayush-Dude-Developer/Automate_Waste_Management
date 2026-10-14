@@ -24,5 +24,8 @@ def log_donation_handover(
     return donation_service.record_handover(restaurant_id, handover)
 
 @router.get("/handovers", response_model=List[HandoverResponse])
-def get_donation_handovers(restaurant_id: str = Depends(get_restaurant_id)):
-    return donation_service.get_handovers(restaurant_id)
+def get_donation_handovers(
+    limit: int | None = Query(default=None, ge=1, le=500),
+    restaurant_id: str = Depends(get_restaurant_id),
+):
+    return donation_service.get_handovers(restaurant_id, limit)

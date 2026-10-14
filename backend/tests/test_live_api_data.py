@@ -13,6 +13,29 @@ class FakeDatabase:
     def get_collection(self, path):
         return self.collections.get(path, [])
 
+    def query_collection(self, path, filters=None, order_by=None, limit=None):
+        records = list(self.get_collection(path))
+        for field, operator, value in filters or []:
+            if operator == "==":
+                records = [record for record in records if record.get(field) == value]
+            elif operator == ">=":
+                records = [record for record in records if record.get(field) is not None and record[field] >= value]
+            elif operator == "<=":
+                records = [record for record in records if record.get(field) is not None and record[field] <= value]
+            elif operator == "<":
+                records = [record for record in records if record.get(field) is not None and record[field] < value]
+            elif operator == "in":
+                records = [record for record in records if record.get(field) in value]
+        if order_by:
+            field, direction = order_by
+            records.sort(key=lambda record: record.get(field), reverse=direction.upper() == "DESCENDING")
+        if limit is not None:
+            records = records[:limit]
+        return records
+
+    def count_collection(self, path, filters=None):
+        return len(self.query_collection(path, filters))
+
     def add_document(self, path, document_id, data):
         self.saved[(path, document_id)] = data
 
@@ -37,6 +60,7 @@ def test_dashboard_aggregates_restaurant_records(monkeypatch):
     assert result.inventory_risk_items == 1
     assert result.pending_interventions == 1
     assert result.donation_handovers == 1
+    assert result.waste_trend[-1].waste == 0.5
 
 
 def test_waste_trend_has_no_hardcoded_sample_data(monkeypatch):

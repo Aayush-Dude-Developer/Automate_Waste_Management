@@ -160,6 +160,13 @@ def record_handover(restaurant_id: str, handover: HandoverRecord) -> HandoverRes
     
     return HandoverResponse(**doc_data)
 
-def get_handovers(restaurant_id: str) -> List[HandoverResponse]:
-    docs = db.get_collection(f"restaurants/{restaurant_id}/donation_handovers")
+def get_handovers(
+    restaurant_id: str,
+    limit: int | None = None,
+) -> List[HandoverResponse]:
+    docs = db.query_collection(
+        f"restaurants/{restaurant_id}/donation_handovers",
+        order_by=("timestamp", "DESCENDING") if limit else None,
+        limit=limit,
+    )
     return [HandoverResponse(**doc) for doc in docs]

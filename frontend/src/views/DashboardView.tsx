@@ -3,21 +3,16 @@ import { Activity, AlertTriangle, Leaf, PackageX, TrendingDown } from 'lucide-re
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiRequest, type DashboardMetrics } from '../lib/api';
 
-interface TrendPoint { day: string; waste: number }
-
 export default function DashboardView() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [trend, setTrend] = useState<DashboardMetrics['waste_trend']>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      apiRequest<DashboardMetrics>('/api/analytics/dashboard'),
-      apiRequest<TrendPoint[]>('/api/analytics/waste-trend'),
-    ]).then(([dashboard, wasteTrend]) => {
+    apiRequest<DashboardMetrics>('/api/analytics/dashboard').then((dashboard) => {
       setMetrics(dashboard);
-      setTrend(wasteTrend);
+      setTrend(dashboard.waste_trend);
       setError('');
     }).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'Could not load dashboard data.');

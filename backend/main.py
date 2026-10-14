@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, health, inventory, waste, documents, planning, ai, donations, analytics
+from .routers import auth, health, inventory, waste, documents, planning, ai, donations, analytics, stock, restaurant
 
 app = FastAPI(
     title="SustainBite / Taiken Ops API",
@@ -26,3 +26,5 @@ app.include_router(planning.router)
 app.include_router(ai.router)
 app.include_router(donations.router)
 app.include_router(analytics.router)
+app.include_router(stock.router)
+app.include_router(restaurant.router)

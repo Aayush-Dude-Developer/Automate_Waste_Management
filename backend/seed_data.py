@@ -22,18 +22,18 @@ RESTAURANT_ID = settings.DEFAULT_RESTAURANT_ID or "taiken_kharadi"
 
 # 1. Base Inventory Definitions
 INVENTORY_SEED = [
-    {"id": "inv_chicken_leg", "item_name": "Chicken Leg", "category": "Meat & Poultry", "brand": "Fresh Farms", "storage_location": "Deep Freezer", "unit_cost_inr": 280.0, "base_unit": "kg", "total_current_quantity": 45.0, "reorder_threshold": 20.0, "safety_stock": 10.0, "shelf_life_days": 14},
-    {"id": "inv_chinese_noodles", "item_name": "Chinese Noodles", "category": "Dry Pantry / Grocery", "brand": "Ching's Secret", "storage_location": "Dry Store", "unit_cost_inr": 95.0, "base_unit": "kg", "total_current_quantity": 60.0, "reorder_threshold": 15.0, "safety_stock": 8.0, "shelf_life_days": 180},
-    {"id": "inv_jasmine_rice", "item_name": "Jasmine Rice", "category": "Dry Pantry / Grocery", "brand": "Royal Umami", "storage_location": "Dry Store", "unit_cost_inr": 160.0, "base_unit": "kg", "total_current_quantity": 80.0, "reorder_threshold": 25.0, "safety_stock": 12.0, "shelf_life_days": 365},
-    {"id": "inv_pak_choi", "item_name": "Pak Choi", "category": "Produce", "brand": "Hydroponic Greens", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 120.0, "base_unit": "kg", "total_current_quantity": 12.5, "reorder_threshold": 8.0, "safety_stock": 4.0, "shelf_life_days": 5},
-    {"id": "inv_dark_soy_sauce", "item_name": "Dark Soy Sauce", "category": "Sauces & Condiments", "brand": "Lee Kum Kee", "storage_location": "Dry Store", "unit_cost_inr": 350.0, "base_unit": "ltr", "total_current_quantity": 18.0, "reorder_threshold": 6.0, "safety_stock": 3.0, "shelf_life_days": 720},
-    {"id": "inv_tofu_firm", "item_name": "Firm Tofu", "category": "Produce", "brand": "Mori-Nu", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 180.0, "base_unit": "kg", "total_current_quantity": 15.0, "reorder_threshold": 8.0, "safety_stock": 4.0, "shelf_life_days": 21},
-    {"id": "inv_tiger_prawns", "item_name": "Tiger Prawns", "category": "Seafood", "brand": "Ocean Catch", "storage_location": "Deep Freezer", "unit_cost_inr": 650.0, "base_unit": "kg", "total_current_quantity": 22.0, "reorder_threshold": 10.0, "safety_stock": 5.0, "shelf_life_days": 30},
-    {"id": "inv_coconut_milk", "item_name": "Coconut Milk", "category": "Dry Pantry / Grocery", "brand": "Chaokoh", "storage_location": "Dry Store", "unit_cost_inr": 210.0, "base_unit": "ltr", "total_current_quantity": 30.0, "reorder_threshold": 12.0, "safety_stock": 6.0, "shelf_life_days": 365},
-    {"id": "inv_thai_green_paste", "item_name": "Thai Green Curry Paste", "category": "Sauces & Condiments", "brand": "Mae Ploy", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 420.0, "base_unit": "kg", "total_current_quantity": 8.0, "reorder_threshold": 4.0, "safety_stock": 2.0, "shelf_life_days": 180},
-    {"id": "inv_cooking_oil", "item_name": "Refined Sunflower Oil", "category": "Dry Pantry / Grocery", "brand": "Fortune", "storage_location": "Dry Store", "unit_cost_inr": 140.0, "base_unit": "ltr", "total_current_quantity": 90.0, "reorder_threshold": 30.0, "safety_stock": 15.0, "shelf_life_days": 365},
-    {"id": "inv_eggs", "item_name": "Farm Fresh Eggs", "category": "Dairy", "brand": "Eggoz", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 7.5, "base_unit": "piece", "total_current_quantity": 250.0, "reorder_threshold": 80.0, "safety_stock": 40.0, "shelf_life_days": 25},
-    {"id": "inv_banana_yellow", "item_name": "Banana Yellow", "category": "Produce", "brand": "Local Mandi", "storage_location": "Kitchen Line / Prep Station", "unit_cost_inr": 50.0, "base_unit": "kg", "total_current_quantity": 10.0, "reorder_threshold": 5.0, "safety_stock": 2.0, "shelf_life_days": 4}
+    {"id": "inv_chicken_leg", "item_name": "Chicken Leg", "category": "Meat & Poultry", "brand": "Fresh Farms", "storage_location": "Deep Freezer", "unit_cost_inr": 280.0, "base_unit": "kg", "total_current_quantity": 45.0, "reorder_threshold": 20.0, "safety_stock": 10.0, "shelf_life_days": 14, "yield_percentage": -15.0, "yield_stage": "trimmed"},
+    {"id": "inv_chinese_noodles", "item_name": "Chinese Noodles", "category": "Dry Pantry / Grocery", "brand": "Ching's Secret", "storage_location": "Dry Store", "unit_cost_inr": 95.0, "base_unit": "kg", "total_current_quantity": 60.0, "reorder_threshold": 15.0, "safety_stock": 8.0, "shelf_life_days": 180, "yield_percentage": 150.0, "yield_stage": "cooked"},
+    {"id": "inv_jasmine_rice", "item_name": "Jasmine Rice", "category": "Dry Pantry / Grocery", "brand": "Royal Umami", "storage_location": "Dry Store", "unit_cost_inr": 160.0, "base_unit": "kg", "total_current_quantity": 80.0, "reorder_threshold": 25.0, "safety_stock": 12.0, "shelf_life_days": 365, "yield_percentage": 100.0, "yield_stage": "cooked"},
+    {"id": "inv_pak_choi", "item_name": "Pak Choi", "category": "Produce", "brand": "Hydroponic Greens", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 120.0, "base_unit": "kg", "total_current_quantity": 12.5, "reorder_threshold": 8.0, "safety_stock": 4.0, "shelf_life_days": 5, "yield_percentage": -10.0, "yield_stage": "trimmed"},
+    {"id": "inv_dark_soy_sauce", "item_name": "Dark Soy Sauce", "category": "Sauces & Condiments", "brand": "Lee Kum Kee", "storage_location": "Dry Store", "unit_cost_inr": 350.0, "base_unit": "ltr", "total_current_quantity": 18.0, "reorder_threshold": 6.0, "safety_stock": 3.0, "shelf_life_days": 720, "yield_percentage": 0.0, "yield_stage": "no change"},
+    {"id": "inv_tofu_firm", "item_name": "Firm Tofu", "category": "Produce", "brand": "Mori-Nu", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 180.0, "base_unit": "kg", "total_current_quantity": 15.0, "reorder_threshold": 8.0, "safety_stock": 4.0, "shelf_life_days": 21, "yield_percentage": -5.0, "yield_stage": "drained"},
+    {"id": "inv_tiger_prawns", "item_name": "Tiger Prawns", "category": "Seafood", "brand": "Ocean Catch", "storage_location": "Deep Freezer", "unit_cost_inr": 650.0, "base_unit": "kg", "total_current_quantity": 22.0, "reorder_threshold": 10.0, "safety_stock": 5.0, "shelf_life_days": 30, "yield_percentage": -35.0, "yield_stage": "peeled"},
+    {"id": "inv_coconut_milk", "item_name": "Coconut Milk", "category": "Dry Pantry / Grocery", "brand": "Chaokoh", "storage_location": "Dry Store", "unit_cost_inr": 210.0, "base_unit": "ltr", "total_current_quantity": 30.0, "reorder_threshold": 12.0, "safety_stock": 6.0, "shelf_life_days": 365, "yield_percentage": 0.0, "yield_stage": "no change"},
+    {"id": "inv_thai_green_paste", "item_name": "Thai Green Curry Paste", "category": "Sauces & Condiments", "brand": "Mae Ploy", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 420.0, "base_unit": "kg", "total_current_quantity": 8.0, "reorder_threshold": 4.0, "safety_stock": 2.0, "shelf_life_days": 180, "yield_percentage": 0.0, "yield_stage": "no change"},
+    {"id": "inv_cooking_oil", "item_name": "Refined Sunflower Oil", "category": "Dry Pantry / Grocery", "brand": "Fortune", "storage_location": "Dry Store", "unit_cost_inr": 140.0, "base_unit": "ltr", "total_current_quantity": 90.0, "reorder_threshold": 30.0, "safety_stock": 15.0, "shelf_life_days": 365, "yield_percentage": 0.0, "yield_stage": "no change"},
+    {"id": "inv_eggs", "item_name": "Farm Fresh Eggs", "category": "Dairy", "brand": "Eggoz", "storage_location": "Cold Store / Chiller", "unit_cost_inr": 7.5, "base_unit": "piece", "total_current_quantity": 250.0, "reorder_threshold": 80.0, "safety_stock": 40.0, "shelf_life_days": 25, "yield_percentage": 0.0, "yield_stage": "no change"},
+    {"id": "inv_banana_yellow", "item_name": "Banana Yellow", "category": "Produce", "brand": "Local Mandi", "storage_location": "Kitchen Line / Prep Station", "unit_cost_inr": 50.0, "base_unit": "kg", "total_current_quantity": 10.0, "reorder_threshold": 5.0, "safety_stock": 2.0, "shelf_life_days": 4, "yield_percentage": -35.0, "yield_stage": "peeled"}
 ]
 
 GLOBAL_CHARITIES = [
@@ -88,11 +88,13 @@ def seed_database():
     # 2. Restaurant Profile
     restaurant_profile = {
         "id": RESTAURANT_ID,
-        "name": "Taiken Pan Asian",
-        "outlet_name": "Kharadi Outlet",
+        "name": "Straits Garden Kitchen",
+        "outlet_name": "Tanjong Pagar",
+        "location": "Tanjong Pagar, Singapore",
+        "address": "Tanjong Pagar, Singapore",
         "company_name": "Culinary Divergence Pvt. Ltd.",
         "cuisine_type": "Pan-Asian / Japanese / Thai / Chinese",
-        "timezone": "Asia/Kolkata",
+        "timezone": "Asia/Singapore",
         "currency": "INR",
         "operating_shifts": [
             {"shift": "Lunch", "start": "12:00", "end": "16:00"},
@@ -108,10 +110,29 @@ def seed_database():
         doc = {
             **item,
             "restaurant_id": RESTAURANT_ID,
+            "ingredient_id": item["id"],
+            "input_unit": item["base_unit"],
+            "output_unit": item["base_unit"],
+            "unit_cost": item["unit_cost_inr"],
+            "stock_in_store": round(item["total_current_quantity"] * 0.7, 2),
+            "stock_in_use": round(item["total_current_quantity"] * 0.3, 2),
             "current_quantity_in_store": round(item["total_current_quantity"] * 0.7, 2),
             "current_quantity_in_use": round(item["total_current_quantity"] * 0.3, 2),
             "status": "in_stock",
             "yield_factor": 0.85 if item["category"] in ["Meat & Poultry", "Seafood"] else 1.0,
+            "yield_type": (
+                "negative" if item["yield_percentage"] < 0 else
+                "positive" if item["yield_percentage"] > 0 else
+                "no change"
+            ),
+            "yield_stages": [] if item["yield_percentage"] == 0 else [{
+                "stage_name": item["yield_stage"],
+                "input_stage": "raw",
+                "output_stage": item["yield_stage"],
+                "input_unit": item["base_unit"],
+                "output_unit": item["base_unit"],
+                "yield_percentage": item["yield_percentage"],
+            }],
             "updated_at": now.isoformat()
         }
         db.add_document(f"restaurants/{RESTAURANT_ID}/inventory_items", item["id"], doc)

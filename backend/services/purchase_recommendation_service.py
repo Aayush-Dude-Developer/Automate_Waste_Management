@@ -42,6 +42,14 @@ def _date(value: Any) -> date | None:
         return None
 
 
+def _is_synthetic_record(record: dict[str, Any]) -> bool:
+    return (
+        record.get("synthetic_demo") is True
+        or record.get("synthetic_sample_data") is True
+        or str(record.get("sales_source", "")).lower() == "synthetic_demo"
+    )
+
+
 def _item_stock(item: dict[str, Any]) -> float:
     if item.get("total_current_quantity") is not None:
         return max(0.0, float(item["total_current_quantity"]))
@@ -148,6 +156,10 @@ def get_purchase_recommendations(
             ("sale_date", "<=", history_end.isoformat()),
         ],
     )
+    synthetic_inputs_detected = any(
+        _is_synthetic_record(record)
+        for record in [*inventory, *recipe_documents, *recipe_ingredients, *sales]
+    )
     data_warnings = []
     if not inventory:
         data_warnings.append("No inventory items are configured.")
@@ -157,12 +169,14 @@ def get_purchase_recommendations(
         data_warnings.append("No recipe ingredient rows are configured.")
     if not sales:
         data_warnings.append("No sales records were found in the 56-day history window; the page will not invent demand.")
+    if synthetic_inputs_detected:
+        data_warnings.append(
+            "Synthetic demo inventory, recipe, or sales records are included in this forecast. "
+            "Treat recommendations as illustrative and replace sample inputs with verified "
+            "operational data before placing orders."
+        )
 
-    max_lead_time = max(
-        (int(item.get("lead_time_days", 0) or 0) for item in inventory),
-        default=0,
-    )
-    projection_days = min(90, forecast_period_days + max_lead_time)
+    projection_days = 90
     forecast_dates = [
         forecast_start + timedelta(days=offset)
         for offset in range(projection_days)
@@ -274,9 +288,34 @@ def get_purchase_recommendations(
         ingredient_id = str(item.get("ingredient_id") or item.get("id"))
         unit = str(item.get("input_unit") or item.get("base_unit") or "kg")
         current_stock = _item_stock(item)
+        lead_time_raw = item.get("lead_time_days")
+        lead_time = int(lead_time_raw) if lead_time_raw is not None else None
+        lead_days = lead_time or 0
+        purchase_horizon_days = min(90, forecast_period_days + lead_days)
         lot_warnings: list[str] = []
+        tracked_lines = lines_by_ingredient.get(ingredient_id, [])
+        latest_expiry = max(
+            (
+                expiry for line in tracked_lines
+                if float(line.get("remaining_usable_quantity", 0) or 0) > 0
+                and (expiry := _date(line.get("expiry_date"))) is not None
+                and expiry >= forecast_start
+            ),
+            default=None,
+        ) if item.get("lot_tracking_enabled") else None
+        expiry_horizon_days = (
+            (latest_expiry - forecast_start).days + 1 if latest_expiry else 0
+        )
+        item_projection_days = min(90, max(purchase_horizon_days, expiry_horizon_days))
+        item_forecast_dates = forecast_dates[:item_projection_days]
+        item_projection_end = item_forecast_dates[-1]
+        purchase_horizon_dates = forecast_dates[:purchase_horizon_days]
+        purchase_horizon_end = purchase_horizon_dates[-1]
+        if expiry_horizon_days > 90:
+            lot_warnings.append(
+                "Known lot expiries extend beyond the 90-day projection limit; later expiry risks are not projected."
+            )
         if item.get("lot_tracking_enabled"):
-            tracked_lines = lines_by_ingredient.get(ingredient_id, [])
             current_stock = max(0.0, float(item.get("untracked_stock_quantity", 0) or 0))
             for line in tracked_lines:
                 remaining = line.get("remaining_usable_quantity")
@@ -284,19 +323,20 @@ def get_purchase_recommendations(
                     lot_warnings.append("Lot tracking is incomplete for one or more verified batches; only recorded lot balances and untracked stock are counted as usable.")
                     continue
                 expiry = _date(line.get("expiry_date"))
+                if expiry is None and float(remaining or 0) > 0:
+                    lot_warnings.append(
+                        "Expiry date is missing for one or more verified batches; those quantities are assumed not to expire during the projection."
+                    )
                 if expiry is None or expiry >= today:
                     current_stock += max(0.0, float(remaining))
             if item.get("untracked_stock_quantity", 0):
                 lot_warnings.append("Some on-hand stock has no batch/expiry assignment and is counted as usable without expiry adjustment.")
         else:
             lot_warnings.append("Lot-level expiry tracking is not enabled; aggregate on-hand stock is used.")
-        lead_time_raw = item.get("lead_time_days")
-        lead_time = int(lead_time_raw) if lead_time_raw is not None else None
-        lead_days = lead_time or 0
         safety_stock = max(0.0, float(item.get("safety_stock", 0) or 0))
         reorder_threshold = max(0.0, float(item.get("reorder_threshold", 0) or 0))
         threshold = max(safety_stock, reorder_threshold)
-        daily_demand = {day: 0.0 for day in forecast_dates}
+        daily_demand = {day: 0.0 for day in item_forecast_dates}
         sales_basis: list[RecommendationDemandBasis] = []
         for recipe_id, raw_per_portion, stock_unit, yield_reference, applied_stages in requirements.get(ingredient_id, []):
             if stock_unit.lower() != unit.lower():
@@ -318,7 +358,7 @@ def get_purchase_recommendations(
                 unit=unit,
                 yield_stages_applied=applied_stages,
             ))
-            for day in forecast_dates:
+            for day in item_forecast_dates:
                 daily_demand[day] += (
                     recipe_forecasts.get(recipe_id, {}).get(day, 0.0) * raw_per_portion
                 )
@@ -326,29 +366,75 @@ def get_purchase_recommendations(
         incoming: list[RecommendationIncomingOrder] = []
         for record in incoming_by_ingredient.get(ingredient_id, []):
             expected = _date(record.get("expected_delivery_date"))
-            if not expected:
+            if not expected or expected > item_projection_end:
                 continue
             incoming.append(RecommendationIncomingOrder(
                 recommendation_id=str(record["id"]),
                 quantity=float(record.get("recommended_purchase_quantity", 0)),
                 expected_delivery_date=expected,
+                expiry_date=(
+                    expected + timedelta(days=int(item["shelf_life_days"]))
+                    if int(item.get("shelf_life_days", 0) or 0) > 0
+                    else None
+                ),
                 order_reference=str(record.get("order_reference") or "Manually recorded order"),
             ))
 
-        projected_stock = current_stock
+        stock_lots: list[dict[str, Any]] = []
+        if item.get("lot_tracking_enabled"):
+            untracked_stock = max(0.0, float(item.get("untracked_stock_quantity", 0) or 0))
+            if untracked_stock:
+                stock_lots.append({"remaining": untracked_stock, "expiry": None})
+            for line in tracked_lines:
+                remaining = line.get("remaining_usable_quantity")
+                expiry = _date(line.get("expiry_date"))
+                if remaining is not None and (expiry is None or expiry >= forecast_start):
+                    stock_lots.append({
+                        "remaining": max(0.0, float(remaining)),
+                        "expiry": expiry,
+                    })
+        elif current_stock:
+            stock_lots.append({"remaining": current_stock, "expiry": None})
+        forecast_start_stock = sum(lot["remaining"] for lot in stock_lots)
+        incoming_by_day: dict[date, list[RecommendationIncomingOrder]] = defaultdict(list)
+        for order in incoming:
+            incoming_by_day[order.expected_delivery_date].append(order)
+
         stockout_date = None
         threshold_breach_date = None
-        total_forecast_consumption = 0.0
-        for day in forecast_dates:
-            projected_stock += sum(
-                order.quantity for order in incoming if order.expected_delivery_date == day
-            )
-            projected_stock -= daily_demand[day]
-            total_forecast_consumption += daily_demand[day]
+        expiry_losses: dict[date, float] = defaultdict(float)
+        for day in item_forecast_dates:
+            for order in incoming_by_day.get(day, []):
+                stock_lots.append({
+                    "remaining": order.quantity,
+                    "expiry": order.expiry_date,
+                })
+            stock_lots.sort(key=lambda lot: (
+                lot["expiry"] is None,
+                lot["expiry"] or date.max,
+            ))
+            demand_remaining = daily_demand[day]
+            for lot in stock_lots:
+                if demand_remaining <= 1e-9:
+                    break
+                used = min(lot["remaining"], demand_remaining)
+                lot["remaining"] -= used
+                demand_remaining -= used
+            if stockout_date is None and daily_demand[day] > 1e-9 and (
+                demand_remaining > 1e-9
+                or sum(lot["remaining"] for lot in stock_lots) <= 1e-9
+            ):
+                stockout_date = day
+            expired_today = 0.0
+            for lot in stock_lots:
+                if lot["expiry"] is not None and lot["expiry"] <= day:
+                    expired_today += lot["remaining"]
+                    lot["remaining"] = 0.0
+            expiry_losses[day] = expired_today
+            stock_lots = [lot for lot in stock_lots if lot["remaining"] > 1e-9]
+            projected_stock = sum(lot["remaining"] for lot in stock_lots)
             if threshold_breach_date is None and projected_stock < threshold:
                 threshold_breach_date = day
-            if stockout_date is None and projected_stock <= 0:
-                stockout_date = day
 
         order_date = (
             threshold_breach_date - timedelta(days=lead_days)
@@ -358,19 +444,87 @@ def get_purchase_recommendations(
         order_due = bool(order_date and order_date <= today)
         total_incoming = sum(
             order.quantity for order in incoming
-            if order.expected_delivery_date <= forecast_dates[-1]
-        ) if forecast_dates else 0.0
-        quantity = max(0.0, total_forecast_consumption + threshold - current_stock - total_incoming)
+            if forecast_start <= order.expected_delivery_date <= purchase_horizon_end
+        )
+        total_forecast_consumption = sum(
+            daily_demand[day] for day in purchase_horizon_dates
+        )
+        total_expiry_loss = sum(expiry_losses[day] for day in purchase_horizon_dates)
+        calculated_quantity = max(
+            0.0,
+            total_forecast_consumption + threshold + total_expiry_loss
+            - forecast_start_stock - total_incoming,
+        )
+        shelf_life_days = int(item.get("shelf_life_days", 0) or 0)
+        delivery_date = (
+            max(today, order_date) + timedelta(days=lead_days)
+            if order_date
+            else today + timedelta(days=lead_days)
+        )
+        recommended_expiry_date = (
+            delivery_date + timedelta(days=shelf_life_days)
+            if shelf_life_days > 0
+            else None
+        )
+        expiry_demand_dates = [
+            day for day in purchase_horizon_dates
+            if recommended_expiry_date is None or day <= recommended_expiry_date
+        ]
+        expiry_demand_capacity = sum(daily_demand[day] for day in expiry_demand_dates)
+        quantity_cap = min(calculated_quantity, expiry_demand_capacity)
+        quantity = quantity_cap
+        expiry_cap_applied = (
+            recommended_expiry_date is not None
+            and quantity_cap + 1e-9 < calculated_quantity
+        )
+        expiry_cap_unavailable = recommended_expiry_date is None
         min_order = item.get("minimum_order_quantity")
         pack_size = item.get("pack_size")
+        minimum_adjusted_quantity = quantity
         if quantity > 0 and min_order is not None:
             quantity = max(quantity, float(min_order))
+            minimum_adjusted_quantity = quantity
         if quantity > 0 and pack_size is not None:
             pack_size = float(pack_size)
             if pack_size <= 0:
                 warnings_by_ingredient[ingredient_id].append("Pack size must be greater than zero; order quantity is not rounded.")
             else:
                 quantity = math.ceil((quantity - 1e-9) / pack_size) * pack_size
+        supplier_adjusted_quantity = quantity
+        expiry_warnings: list[str] = []
+        if expiry_cap_unavailable:
+            expiry_warnings.append(
+                "Shelf life is not configured; the recommendation cannot be capped by the new order's expiry."
+            )
+        elif expiry_demand_capacity <= 1e-9 and calculated_quantity > 0:
+            quantity = 0.0
+            expiry_warnings.append(
+                "No forecast demand is available between the estimated delivery date and expiry "
+                "within the purchase horizon; no order quantity is recommended."
+            )
+        elif supplier_adjusted_quantity > expiry_demand_capacity + 1e-9:
+            quantity = expiry_demand_capacity
+            expiry_warnings.append(
+                f"Supplier minimum/pack constraints would exceed the {expiry_demand_capacity:.4f} "
+                f"{unit} forecast demand allowed by the purchase-horizon/expiry window; quantity is capped "
+                "to that demand and may "
+                "not meet supplier constraints."
+            )
+        if expiry_cap_applied and expiry_demand_capacity > 1e-9:
+            expiry_warnings.append(
+                f"Order quantity is capped at {expiry_demand_capacity:.4f} {unit}, the forecast "
+                "demand within the purchase horizon and before the new batch expiry."
+            )
+        elif expiry_cap_unavailable and quantity_cap + 1e-9 < calculated_quantity:
+            expiry_warnings.append(
+                f"Quantity is limited to {expiry_demand_capacity:.4f} {unit}, the forecast demand "
+                "within the purchase horizon; the item's expiry is unknown."
+            )
+        if stockout_date and delivery_date > stockout_date:
+            expiry_warnings.append(
+                f"Estimated delivery ({delivery_date.isoformat()}) is after projected stockout "
+                f"({stockout_date.isoformat()}); ordering now may not prevent an interruption."
+            )
         has_sales_basis = any(
             recipe_id in active_recipe_ids_with_sales
             for recipe_id, *_ in requirements.get(ingredient_id, [])
@@ -379,7 +533,16 @@ def get_purchase_recommendations(
             quantity = 0.0
         quantity = round(quantity, 4)
 
-        warnings = [*lot_warnings, *warnings_by_ingredient.get(ingredient_id, [])]
+        warnings = [
+            *lot_warnings,
+            *expiry_warnings,
+            *warnings_by_ingredient.get(ingredient_id, []),
+        ]
+        if synthetic_inputs_detected:
+            warnings.append(
+                "This forecast includes synthetic demo inputs; do not use its quantity as a "
+                "live purchasing instruction until verified operational data is loaded."
+            )
         if sales_day_count < 14:
             warnings.append(f"Only {sales_day_count} distinct sales days were found in the 56-day history window.")
         if not requirements.get(ingredient_id):
@@ -414,7 +577,13 @@ def get_purchase_recommendations(
             warnings.append("Expired batch balances are excluded from usable stock. Record a waste/write-off for expired physical stock to reconcile aggregate inventory.")
         if expired_or_near_expiry:
             warnings.append("Batch expiry and remaining quantities are displayed from verified purchase lots.")
-        if sales_day_count < 14 or not requirements.get(ingredient_id) or warnings_by_ingredient.get(ingredient_id):
+        if (
+            synthetic_inputs_detected
+            or sales_day_count < 14
+            or not requirements.get(ingredient_id)
+            or warnings_by_ingredient.get(ingredient_id)
+            or expiry_cap_unavailable
+        ):
             reliability = "low"
         elif sales_day_count < 28 or lead_time is None or lead_time <= 0:
             reliability = "medium"
@@ -439,21 +608,83 @@ def get_purchase_recommendations(
             if item.get("unit_cost", item.get("unit_cost_inr")) is not None
             else None
         )
-        forecast_daily_average = (
-            sum(daily_demand[day] for day in forecast_dates[:forecast_period_days])
-            / forecast_period_days
+        forecast_daily_average = sum(
+            daily_demand[day] for day in forecast_dates[:forecast_period_days]
+        ) / forecast_period_days
+        order_date_reason = (
+            f"first projected drop below the {threshold:g} {unit} buffer on "
+            f"{threshold_breach_date.isoformat()} minus {lead_days} lead days = "
+            f"{order_date.isoformat()}."
+            if threshold_breach_date and order_date
+            else "no buffer breach is projected in this item's horizon."
         )
+        if order_date and order_date <= today:
+            order_date_reason += f" This date is on or before the forecast run date ({today.isoformat()})."
+        if supplier_adjusted_quantity > expiry_demand_capacity + 1e-9:
+            rounding_reason = (
+                f"Supplier minimum/pack rules would raise the quantity to "
+                f"{supplier_adjusted_quantity:.4f} {unit}, above the purchase-horizon/expiry "
+                f"demand cap; final quantity remains {quantity:.4f} {unit}."
+            )
+        else:
+            rounding_reason = (
+                f"Supplier minimum/pack rules result in {quantity:.4f} {unit} "
+                f"(minimum-adjusted quantity {minimum_adjusted_quantity:.4f} {unit})."
+            )
+        explanation_points = [
+            f"Demand: about {forecast_daily_average:.2f} {unit}/day in the selected {forecast_period_days}-day forecast.",
+            (
+                f"Coverage: {len(purchase_horizon_dates)} days total "
+                f"({forecast_period_days} forecast + {lead_days}-day supplier lead time)."
+            ),
+            (
+                f"Stock: {forecast_start_stock:.2f} {unit} usable; {total_incoming:.2f} {unit} "
+                f"incoming; {total_expiry_loss:.2f} {unit} expected to expire during coverage. "
+                f"Target buffer: {threshold:.2f} {unit}."
+            ),
+            (
+                f"Timing: order by {order_date.isoformat() if order_date else 'not triggered'}; "
+                f"delivery if ordered today: {delivery_date.isoformat()}. "
+                f"Projected stockout: {stockout_date.isoformat() if stockout_date else 'not in forecast'}."
+                f"{' The recommended order date has passed.' if order_date and order_date <= today else ''}"
+            ),
+            (
+                f"Order: {quantity:.2f} {unit} recommended. The limit is "
+                f"{quantity_cap:.2f} {unit} (need {calculated_quantity:.2f} {unit}, capped to "
+                f"forecast demand before expiry/forecast end)."
+                f"{' Supplier pack/minimum exceeds the limit; see warning below.' if supplier_adjusted_quantity > quantity_cap + 1e-9 else ''}"
+            ),
+        ]
         explanation = (
-            f"Baseline: average net portions sold for each weekday over {HISTORY_DAYS} days, "
-            f"with per-recipe trend bounded to {MIN_TREND_FACTOR:.1f}–{MAX_TREND_FACTOR:.1f}x. "
-            f"Recipe quantities were divided by batch servings and converted once to raw stock units. "
-            f"Recorded inventory is {current_stock:g} {unit}; confirmed incoming orders due in the "
-            f"projection are {total_incoming:g} {unit}. Projected consumption over {len(forecast_dates)} "
-            f"days is {total_forecast_consumption:g} {unit}; reorder buffer (max of threshold and safety "
-            f"stock) is {threshold:g} {unit}. The calculated order quantity is forecast consumption + "
-            f"reorder buffer - current stock - "
-            f"confirmed incoming, then supplier minimum and pack-size constraints are applied. "
-            f"Forecast quality: {reliability}."
+            f"Daily consumption is the average of the next {forecast_period_days} daily ingredient "
+            f"forecasts ({forecast_daily_average:.4f} {unit}/day). Each recipe forecast uses the "
+            f"average net portions for the matching weekday across the preceding {HISTORY_DAYS} days, "
+            f"multiplied by a per-recipe trend factor bounded to "
+            f"{MIN_TREND_FACTOR:.1f}x to {MAX_TREND_FACTOR:.1f}x. Recipe ingredient quantities are divided "
+            f"by batch servings and converted once through configured yields to raw stock units. "
+            f"Purchase quantity horizon is {len(purchase_horizon_dates)} days "
+            f"({forecast_start.isoformat()} through {purchase_horizon_end.isoformat()}: "
+            f"{forecast_period_days} forecast days + this item's {lead_days}-day lead time); "
+            f"stock and expiry risk are projected for {len(item_forecast_dates)} days through "
+            f"{item_projection_end.isoformat()} (up to the latest known current-lot expiry, capped at 90 days). "
+            f"Usable stock is {current_stock:.4f} {unit}; incoming orders due within this horizon "
+            f"total {total_incoming:.4f} {unit}. Projected consumption in the purchase horizon is "
+            f"{total_forecast_consumption:.4f} {unit}; {total_expiry_loss:.4f} {unit} of current/"
+            f"incoming stock is forecast to expire before that horizon ends. Effective reorder buffer is max(reorder "
+            f"threshold {reorder_threshold:.4f}, safety stock {safety_stock:.4f}) = {threshold:.4f} "
+            f"{unit}. Quantity before expiry/supplier limits = consumption + buffer + forecast expiry "
+            f"loss - forecast-start usable stock - incoming = {total_forecast_consumption:.4f} + "
+            f"{threshold:.4f} + {total_expiry_loss:.4f} - {forecast_start_stock:.4f} - {total_incoming:.4f} = "
+            f"{calculated_quantity:.4f} {unit}. Estimated delivery is {delivery_date.isoformat()}; "
+            f"new stock expires {recommended_expiry_date.isoformat() if recommended_expiry_date else 'on an unknown date'}. "
+            f"Forecast demand within the purchase horizon and before the new batch expiry is "
+            f"{expiry_demand_capacity:.4f} {unit}, so the expiry-capped quantity is "
+            f"{min(calculated_quantity, expiry_demand_capacity):.4f} {unit}; {rounding_reason} "
+            f"Projected stockout is the first day forecast demand exhausts available stock or cannot "
+            f"be met. Recommended "
+            f"order date is {order_date_reason} This recommendation covers the next replenishment only; "
+            f"future orders are recalculated from updated stock and expiry records. Forecast quality: {reliability}."
+            f"{' Inputs include synthetic demo data; treat this as illustrative only.' if synthetic_inputs_detected else ''}"
         )
         recommendations.append(PurchaseRecommendation(
             recommendation_id=_recommendation_id(forecast_start, forecast_period_days, ingredient_id),
@@ -462,8 +693,14 @@ def get_purchase_recommendations(
             forecast_start_date=forecast_start,
             forecast_period_days=forecast_period_days,
             current_usable_stock=current_stock,
+            forecast_start_usable_stock=forecast_start_stock,
             stock_unit=unit,
-            stock_source="Current inventory on-hand quantity; batch-level remaining quantities are not tracked.",
+            stock_source=(
+                "Lot-tracked usable stock: unexpired verified batch balances plus untracked stock; "
+                "expired batch balances are excluded."
+                if item.get("lot_tracking_enabled")
+                else "Aggregate current on-hand quantity; lot-level expiry tracking is not enabled."
+            ),
             forecast_daily_consumption=round(forecast_daily_average, 4),
             reorder_threshold=reorder_threshold,
             safety_stock=safety_stock,
@@ -471,15 +708,23 @@ def get_purchase_recommendations(
             supplier_lead_time_days=lead_time,
             projected_stockout_date=stockout_date,
             recommended_order_date=order_date,
+            recommended_delivery_date=delivery_date if quantity > 0 else None,
+            recommended_expiry_date=recommended_expiry_date if quantity > 0 else None,
             recommended_purchase_quantity=quantity,
             estimated_purchase_cost=estimated_cost,
             priority=priority,
             status=status,
             explanation=explanation,
+            explanation_points=explanation_points,
             reliability_warnings=warnings,
             demand_forecast={
                 day.isoformat(): round(daily_demand[day], 4)
-                for day in forecast_dates
+                for day in item_forecast_dates
+            },
+            expiry_losses_by_day={
+                day.isoformat(): round(expiry_losses[day], 4)
+                for day in item_forecast_dates
+                if expiry_losses[day] > 0
             },
             sales_basis=sales_basis,
             incoming_orders=incoming,

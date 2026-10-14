@@ -14,7 +14,8 @@
       "accepts_cooked_food": true,
       "requires_cold_chain": false,
       "operating_hours": "18:00 - 23:30",
-      "verified": true
+      "verified": false,
+      "synthetic_sample_data": true
     },
     {
       "id": "charity_feeding_india",
@@ -30,7 +31,8 @@
       "accepts_cooked_food": true,
       "requires_cold_chain": true,
       "operating_hours": "11:00 - 22:00",
-      "verified": true
+      "verified": false,
+      "synthetic_sample_data": true
     },
     {
       "id": "charity_savitribai_orphanage",
@@ -45,18 +47,19 @@
       "accepts_cooked_food": true,
       "requires_cold_chain": false,
       "operating_hours": "08:00 - 20:00",
-      "verified": true
+      "verified": false,
+      "synthetic_sample_data": true
     }
   ],
   "restaurants/taiken_kharadi/profile": [
     {
       "id": "taiken_kharadi",
       "name": "Straits Garden Kitchen",
-      "outlet_name": "Tanjong Pagar",
-      "company_name": "Culinary Divergence Pvt. Ltd.",
+      "outlet_name": "Kharadi",
       "cuisine_type": "Pan-Asian / Japanese / Thai / Chinese",
-      "timezone": "Asia/Singapore",
+      "timezone": "Asia/Kolkata",
       "currency": "INR",
+      "synthetic_sample_data": true,
       "operating_shifts": [
         {
           "shift": "Lunch",
@@ -70,8 +73,8 @@
         }
       ],
       "created_at": "2025-10-06T07:48:49.817810+00:00",
-      "location": "Tanjong Pagar, Singapore",
-      "address": "Tanjong Pagar, Singapore",
+      "location": "Kharadi, Pune, India",
+      "address": "Kharadi, Pune, India",
       "updated_at": "2026-10-11T10:28:18.912293+00:00"
     }
   ],

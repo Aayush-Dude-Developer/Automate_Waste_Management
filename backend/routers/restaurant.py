@@ -18,8 +18,8 @@ def get_restaurant_profile(
         **profile,
         "id": restaurant_id,
         "name": profile.get("name", "Straits Garden Kitchen"),
-        "outlet_name": profile.get("outlet_name", "Tanjong Pagar"),
-        "location": profile.get("location", "Tanjong Pagar, Singapore"),
-        "address": profile.get("address", "Tanjong Pagar, Singapore"),
-        "timezone": profile.get("timezone", "Asia/Singapore"),
+        "outlet_name": profile.get("outlet_name", "Kharadi"),
+        "location": profile.get("location", "Kharadi, Pune, India"),
+        "address": profile.get("address", "Kharadi, Pune, India"),
+        "timezone": profile.get("timezone", "Asia/Kolkata"),
     }

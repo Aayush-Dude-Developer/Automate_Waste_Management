@@ -161,7 +161,7 @@ sample mapping default to 0% / no change. Review the preview and adjust actual k
 yields before relying on those values for purchasing or theoretical-consumption decisions.
 The migration preserves inventory balances, other profile fields, and the existing
 currency, and records `restaurant_yield_sg_v1`. Add `--restaurant-profile` to preview and
-apply the requested Singapore restaurant name and location. To persist after reviewing
+apply the requested India restaurant name and location. To persist after reviewing
 the output, add `--apply`. Back up the Firestore project before applying changes.
 
 ### Firestore operation usage
@@ -192,11 +192,11 @@ usage and billing in the Google Cloud/Firebase console.
 ### 2.1 `restaurants`
 - `id` (string, UUID): e.g. `"taiken_kharadi"`
 - `name` (string): `"Straits Garden Kitchen"`
-- `outlet_name` (string): `"Tanjong Pagar"`
-- `location` / `address` (string): `"Tanjong Pagar, Singapore"`
+- `outlet_name` (string): `"Kharadi"`
+- `location` / `address` (string): `"Kharadi, Pune, India"`
 - `company_name` (string): `"Culinary Divergence Pvt. Ltd."`
 - `cuisine_type` (string): `"Pan-Asian / Japanese / Thai / Chinese"`
-- `timezone` (string): `"Asia/Singapore"`
+- `timezone` (string): `"Asia/Kolkata"`
 - `currency` (string): `"INR"` (₹)
 - `operating_shifts` (array of objects): `[{"shift": "Lunch", "start": "12:00", "end": "16:00"}, {"shift": "Dinner", "start": "19:00", "end": "23:30"}]`
 - `created_at` (ISO timestamp)

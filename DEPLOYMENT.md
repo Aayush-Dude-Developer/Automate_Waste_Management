@@ -485,6 +485,6 @@ For the short recovery checklist, see
   workspace; user-specific/multi-tenant workspaces are not implemented.
 - Local development auth bypass is enabled only when the backend environment
   is `development`. Production must remain `ENVIRONMENT=production`.
-- Document OCR is not implemented. Donation matching may include seeded demo
-  centres unless AI discovery is enabled. Verify donation organizations
-  independently.
+- Document extraction requires the `GEMINI_API_KEY` secret. Donation matching
+  may include seeded demo centres unless AI discovery is enabled. Verify
+  donation organizations independently.

@@ -130,6 +130,7 @@ export default function SurplusWasteView() {
 
   const investigate = async (item: InventoryItem, serviceDate: string) => {
     setInvestigatingId(item.id);
+    setInvestigationResult(null);
     setError('');
     setNotice('');
     try {
@@ -212,8 +213,9 @@ export default function SurplusWasteView() {
 
       <section className="flex h-fit flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center border-b bg-indigo-50 p-4"><Sparkles className="mr-2 h-5 w-5 text-indigo-600" /><h2 className="text-lg font-semibold text-indigo-900">Investigation</h2></div>
-        {!investigationResult ? <div className="p-6 text-center text-sm text-slate-500"><Search className="mx-auto mb-3 h-6 w-6" />Analyze a waste entry linked to an inventory item to get a backend investigation.</div> :
+        {!investigationResult ? <div role={investigatingId ? 'status' : undefined} className="p-6 text-center text-sm text-slate-500">{investigatingId ? <><Sparkles className="mx-auto mb-3 h-6 w-6 animate-pulse text-indigo-600" />Analyzing risk. If Gemini is unavailable, a deterministic fallback will be used.</> : <><Search className="mx-auto mb-3 h-6 w-6" />Analyze a waste entry linked to an inventory item to get a backend investigation.</>}</div> :
           <div className="space-y-4 p-5">
+            {investigationResult.analysis_source === 'deterministic' && <div role="status" className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Gemini is temporarily unavailable. This result uses a deterministic fallback and does not verify changes in demand.</div>}
             <div><h3 className="font-bold text-slate-800">{investigationResult.target_item_name}</h3><p className="text-sm text-slate-600">{investigationResult.investigation_summary}</p><p className="mt-1 text-sm font-medium">Risk: ₹{investigationResult.financial_risk_inr.toLocaleString()}</p></div>
             <div className="rounded bg-slate-50 p-3"><h4 className="mb-1 flex items-center text-sm font-semibold"><CheckCircle className="mr-1 h-4 w-4 text-emerald-600" />Verified facts</h4><ul className="list-inside list-disc text-sm text-slate-600">{investigationResult.verified_facts.map((fact, index) => <li key={index}>{fact}</li>)}</ul></div>
             <div className="rounded bg-amber-50 p-3"><h4 className="mb-1 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1 h-4 w-4 text-amber-600" />Hypotheses</h4><ul className="list-inside list-disc text-sm text-amber-800">{investigationResult.hypotheses.map((hypothesis, index) => <li key={index}>{hypothesis}</li>)}</ul></div>

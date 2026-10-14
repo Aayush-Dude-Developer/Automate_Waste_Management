@@ -1,9 +1,14 @@
 import json
+import logging
 import uuid
 from ..schemas.ai import SurplusInvestigationResponse, InterventionProposal
 from ..config import settings
 from .tools import get_inventory_status, get_recent_waste_history, check_donation_eligibility
 from ..repositories.database import db
+
+logger = logging.getLogger(__name__)
+GEMINI_TIMEOUT_MS = 60_000
+
 
 def run_surplus_investigation(restaurant_id: str, item_id: str, item_name: str) -> SurplusInvestigationResponse:
     # This acts as the agent orchestrator
@@ -20,7 +25,13 @@ def run_surplus_investigation(restaurant_id: str, item_id: str, item_name: str) 
             from google import genai
             from google.genai import types
             
-            client = genai.Client(api_key=api_key)
+            client = genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(
+                    timeout=GEMINI_TIMEOUT_MS,
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
+            )
             
             prompt = f"""
             You are the Surplus Investigation Agent for a restaurant.
@@ -108,6 +119,7 @@ def run_surplus_investigation(restaurant_id: str, item_id: str, item_name: str) 
             result = SurplusInvestigationResponse(
                 id=investigation_id,
                 target_item_name=item_name,
+                analysis_source="gemini",
                 investigation_summary=data["investigation_summary"],
                 verified_facts=data["verified_facts"],
                 hypotheses=data["hypotheses"],
@@ -120,7 +132,10 @@ def run_surplus_investigation(restaurant_id: str, item_id: str, item_name: str) 
             return result
             
         except Exception as e:
-            print(f"Gemini API failed: {e}. Falling back to deterministic heuristics.")
+            logger.warning(
+                "Gemini API failed; using deterministic investigation fallback: %s",
+                e,
+            )
     
     # 3. Fallback Deterministic Logic (if API key missing or error)
     investigation_id = f"inv_{uuid.uuid4().hex[:12]}"
@@ -136,10 +151,20 @@ def run_surplus_investigation(restaurant_id: str, item_id: str, item_name: str) 
     result = SurplusInvestigationResponse(
         id=investigation_id,
         target_item_name=item_name,
-        investigation_summary=f"Automated risk analysis for {item_name}. High surplus detected.",
+        analysis_source="deterministic",
+        investigation_summary=(
+            f"Deterministic risk assessment for {item_name}. "
+            "Gemini analysis is temporarily unavailable."
+        ),
         verified_facts=facts,
-        hypotheses=["Demand has dropped compared to historical averages.", "Possible over-ordering from supplier."],
-        data_gaps=["No scheduled buffet cover data available for tonight."],
+        hypotheses=[
+            "Demand changes have not been verified.",
+            "Order quantities have not been compared with forecast demand.",
+        ],
+        data_gaps=[
+            "Gemini analysis is unavailable.",
+            "No scheduled buffet cover data is available.",
+        ],
         financial_risk_inr=fin_risk,
         recommended_interventions=[
             InterventionProposal(

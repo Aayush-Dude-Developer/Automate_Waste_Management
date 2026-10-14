@@ -49,23 +49,59 @@ All endpoints require the HTTP header `X-Restaurant-Id: <restaurant_id>` (defaul
 - `POST /api/documents/upload`
   - Multipart form upload (`file: UploadFile`, `document_type_hint: Optional[str]`).
   - Computes SHA-256 hash to detect duplicate uploads.
-  - Calls Gemini 2.5 Flash / PDF parser to extract tabular structures.
-  - Returns `ExtractionPreviewResponse` with confidence scores, ambiguous fields flagged for human review, and field mappings.
+  - Calls the configured Gemini model with the document to extract records; requires `GEMINI_API_KEY`.
+  - Returns `ExtractionPreviewResponse` with confidence scores, ambiguous fields flagged for human review, canonical `available_fields`, and mapped records.
+- `POST /api/documents/amend-records`
+  - Body: `{"target_entity": str, "current_records": List[dict], "amendment": str}`.
+  - Uses Gemini to apply a customer instruction to a bounded set of reviewed rows.
+    The result remains a preview and must be explicitly confirmed before import.
 - `POST /api/documents/confirm-import`
   - Body: `{"document_id": str, "confirmed_records": List[dict], "target_entity": str}`.
   - Validates and bulk-commits approved records into target collection (`waste_records`, `staff_meal_records`, or `inventory_items`).
+
+## Donation centre discovery
+- `POST /api/donations/match?use_ai=true`
+  - Include the restaurant's `location_area`, `city`, and `country` in the request;
+    `state` and `pincode` are optional.
+  - AI discovery uses Google Search grounding to check Google Maps listings and
+    centre websites. It returns only supported details, links to the Maps listing,
+    timings, phone, minimum accepted weight, pickup availability, and vegetarian/
+    non-vegetarian acceptance when found. Unknown values remain null.
+  - Results are ranked by approximate straight-line distance when Google Maps
+    coordinates are available; centres without verifiable coordinates appear last.
+    AI results are unverified and discovery failures do not silently fall back to
+    demo centres.
 
 ---
 
 ## 5. Forecasting & Buffet Planning
 - `GET /api/purchase-recommendations?forecast_period_days=7`
-  - Uses the bounded 56-day, weekday-based net-sales baseline and active recipe
-    ingredient requirements to forecast raw stock demand, applying configured yield
-    conversions once. Returns projected stockout/order dates, incoming ordered
-    recommendations, supplier constraints, prices, source data and reliability warnings.
-  - Forecast period is 1-28 days (default 7); supplier lead time is included in the
-    stock projection. Ingredients without relevant sales history do not receive an
-    invented demand or purchase quantity.
+  - Forecasts recipe portions from the average net sales for each matching weekday
+    over the prior 56 days, with a per-recipe 28-day trend factor bounded to 0.8-1.2.
+    Recipe ingredient quantities are divided by batch servings and converted through
+    configured yields once. The daily-consumption field averages the selected forecast
+    period; purchase quantity and stock projection use that period plus the individual
+    ingredient's supplier lead time, capped at 90 days (not the longest lead time across all ingredients).
+  - Projected stockout is the first date projected usable stock reaches zero or less.
+    Recommended order date is the first projected date stock falls below
+    `max(reorder_threshold, safety_stock)`, minus that ingredient's lead time. Quantity
+    includes demand and target buffer, plus stock forecast to expire, less stock usable at
+    the forecast start and confirmed incoming orders. The result is capped at demand from
+    within the item-specific purchase horizon and before the new order's configured
+    shelf-life expiry. The effective cap is the smaller of replenishment need and forecast
+    demand in that purchase-horizon/expiry window; a long shelf life never extends the
+    forecast horizon. Supplier minimum and pack size cannot
+    raise the final quantity above that cap; any conflict is reported as a warning.
+    Existing verified batch stock is depleted by earliest expiry first; remaining balances
+    are removed after each expiry date. Stockout and reorder timing use that expiry-aware
+    daily balance. `recommended_delivery_date`, `recommended_expiry_date`, and
+    `expiry_losses_by_day` expose the estimated next-lot dates and expiry adjustments.
+    Ingredients without relevant sales history do not receive invented demand.
+    Records marked synthetic cause an explicit dashboard warning and low reliability;
+    recommendations based on them are illustrative, not live purchasing instructions.
+    Each recommendation includes a short `explanation_points` list for the main UI
+    summary; `explanation`, `sales_basis`, the daily demand/expiry maps, and warnings
+    provide detailed calculation evidence for users who need it.
 - `PATCH /api/purchase-recommendations/{recommendation_id}/status`
   - Body includes `status` (`approved`, `ordered`, or `received`), `ingredient_id`,
     `forecast_start_date` and `forecast_period_days`. Ordered status also requires an

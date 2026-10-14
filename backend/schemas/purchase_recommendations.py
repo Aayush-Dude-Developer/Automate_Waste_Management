@@ -31,6 +31,7 @@ class RecommendationIncomingOrder(BaseModel):
     recommendation_id: str
     quantity: float
     expected_delivery_date: date
+    expiry_date: date | None = None
     order_reference: str
 
 
@@ -51,6 +52,7 @@ class PurchaseRecommendation(BaseModel):
     forecast_start_date: date
     forecast_period_days: int
     current_usable_stock: float
+    forecast_start_usable_stock: float
     stock_unit: str
     stock_source: str
     forecast_daily_consumption: float
@@ -60,13 +62,17 @@ class PurchaseRecommendation(BaseModel):
     supplier_lead_time_days: int | None
     projected_stockout_date: date | None
     recommended_order_date: date | None
+    recommended_delivery_date: date | None = None
+    recommended_expiry_date: date | None = None
     recommended_purchase_quantity: float
     estimated_purchase_cost: float | None
     priority: Literal["critical", "high", "medium", "low"]
     status: RecommendationStatus | Literal["no_action"]
     explanation: str
+    explanation_points: list[str] = Field(default_factory=list)
     reliability_warnings: list[str] = Field(default_factory=list)
     demand_forecast: dict[str, float] = Field(default_factory=dict)
+    expiry_losses_by_day: dict[str, float] = Field(default_factory=dict)
     sales_basis: list[RecommendationDemandBasis] = Field(default_factory=list)
     incoming_orders: list[RecommendationIncomingOrder] = Field(default_factory=list)
     expiry_batches: list[RecommendationExpiryBatch] = Field(default_factory=list)

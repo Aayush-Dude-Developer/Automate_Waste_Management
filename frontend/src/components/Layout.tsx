@@ -26,6 +26,7 @@ export default function Layout({ children }: LayoutProps) {
   const [profileError, setProfileError] = useState('');
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/documents', icon: FileText, label: 'Documents & Imports' },
     { to: '/inventory', icon: Package, label: 'Inventory' },
     { to: '/sales-purchases', icon: ShoppingCart, label: 'Purchase Recommendations' },
     { to: '/purchases', icon: FileText, label: 'Purchase Invoices' },
@@ -34,7 +35,6 @@ export default function Layout({ children }: LayoutProps) {
     { to: '/buffet-planning', icon: ChefHat, label: 'Buffet Planning' },
     { to: '/surplus-waste', icon: Trash2, label: 'Surplus & Waste' },
     { to: '/donations', icon: HeartHandshake, label: 'Donation Centres' },
-    { to: '/documents', icon: FileText, label: 'Documents & Imports' },
     { to: '/impact', icon: BarChart3, label: 'Reports & Impact' },
     { to: '/settings', icon: Settings, label: 'Settings' },
   ];
@@ -81,7 +81,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="p-4 border-t border-slate-200">
           <div className="flex items-center">
             <div className="h-8 w-8 rounded-full bg-restaurant-secondary/20 flex items-center justify-center text-restaurant-secondary font-bold">
-              T
+              {restaurant?.name?.slice(0, 1) ?? 'S'}
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-slate-700">{restaurant?.name ?? 'Authorized workspace'}</p>
@@ -93,6 +93,11 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
+        {restaurant?.synthetic_sample_data && (
+          <div role="status" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-center text-xs font-medium text-amber-900">
+            Sample data is loaded for demonstration. Review and replace generated records before using them for operations.
+          </div>
+        )}
         {children}
       </main>
     </div>

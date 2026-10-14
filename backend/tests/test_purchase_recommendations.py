@@ -131,6 +131,86 @@ def test_weekday_sales_yield_projection_order_date_and_supplier_rounding(monkeyp
     assert row.estimated_purchase_cost == 60
     assert row.priority == "critical"
     assert "56 days" in row.explanation
+    assert "7 forecast days + this item's 2-day lead time" in row.explanation
+    assert "Quantity before expiry/supplier limits" in row.explanation
+    assert len(row.explanation_points) == 5
+    assert row.explanation_points[0].startswith("Demand:")
+    assert row.explanation_points[-1].startswith("Order:")
+    assert len(row.explanation_points[-1]) < 200
+
+
+def test_purchase_horizon_uses_each_items_own_supplier_lead_time(monkeypatch):
+    as_of = date(2026, 10, 11)
+    data = base_data(as_of)
+    data["restaurants/demo/inventory_items"].append({
+        **rice_inventory(stock=5),
+        "id": "short-lead",
+        "ingredient_id": "short-lead",
+        "item_name": "Short Lead Ingredient",
+        "reorder_threshold": 2,
+        "safety_stock": 1,
+        "lead_time_days": 1,
+        "minimum_order_quantity": None,
+        "pack_size": None,
+    })
+    data["restaurants/demo/recipe_ingredients"].append({
+        "id": "recipe-short-lead",
+        "recipe_id": "rice-bowl",
+        "ingredient_id": "short-lead",
+        "required_quantity": 1,
+        "required_unit": "kg",
+        "required_stage": "raw",
+        "yield_stage_reference": None,
+        "servings_per_batch": 2,
+    })
+    monkeypatch.setattr(recommendations, "db", FakeDatabase(data))
+
+    result = recommendations.get_purchase_recommendations("demo", 7, as_of)
+    rows = {row.ingredient_id: row for row in result.recommendations}
+
+    assert len(rows["rice"].demand_forecast) == 9
+    assert len(rows["short-lead"].demand_forecast) == 8
+    assert rows["rice"].recommended_purchase_quantity == 15
+    assert rows["short-lead"].recommended_purchase_quantity == 13
+
+
+def test_expiring_current_lot_is_removed_and_order_is_capped_by_new_lot_life(monkeypatch):
+    as_of = date(2026, 10, 11)
+    data = base_data(as_of)
+    data["restaurants/demo/inventory_items"][0].update({
+        "lot_tracking_enabled": True,
+        "untracked_stock_quantity": 0,
+        "shelf_life_days": 2,
+        "lead_time_days": 3,
+        "minimum_order_quantity": 5,
+        "pack_size": 7,
+    })
+    data["restaurants/demo/purchase_invoices"] = [{
+        "id": "expiring-invoice",
+        "purchase_id": "expiring-invoice",
+        "verification_status": "verified",
+    }]
+    data["restaurants/demo/purchase_lines"] = [{
+        "id": "expiring-line",
+        "purchase_id": "expiring-invoice",
+        "ingredient_id": "rice",
+        "expiry_date": "2026-10-12",
+        "remaining_usable_quantity": 5,
+        "usable_unit": "kg",
+    }]
+    monkeypatch.setattr(recommendations, "db", FakeDatabase(data))
+
+    row = recommendations.get_purchase_recommendations("demo", 7, as_of).recommendations[0]
+
+    assert row.projected_stockout_date == date(2026, 10, 13)
+    assert row.recommended_order_date == date(2026, 10, 9)
+    assert row.recommended_delivery_date == date(2026, 10, 14)
+    assert row.recommended_expiry_date == date(2026, 10, 16)
+    assert row.expiry_losses_by_day["2026-10-12"] == pytest.approx(3)
+    assert row.recommended_purchase_quantity == pytest.approx(10)
+    assert "forecast demand before expiry/forecast end" in row.explanation_points[-1]
+    assert any("may not meet supplier constraints" in warning for warning in row.reliability_warnings)
+    assert any("may not prevent an interruption" in warning for warning in row.reliability_warnings)
 
 
 def test_confirmed_incoming_order_reduces_purchase_requirement(monkeypatch):
@@ -185,6 +265,7 @@ def test_lot_stock_excludes_expired_quantity_and_shows_remaining_batches(monkeyp
     assert any(batch.expired and batch.remaining_usable_quantity == 2 for batch in row.expiry_batches)
     assert any(not batch.expired and batch.remaining_usable_quantity == 3 for batch in row.expiry_batches)
     assert any("Expired batch balances are excluded" in warning for warning in row.reliability_warnings)
+    assert "Lot-tracked usable stock" in row.stock_source
 
 
 def test_lot_depletion_uses_earliest_unexpired_batch_and_rejects_shortage(monkeypatch):
@@ -231,7 +312,11 @@ def test_synthetic_demo_dataset_populates_reliable_recommendation_inputs(monkeyp
     assert len(seeded["restaurants/taiken_kharadi/recipes"]) == 3
     assert dashboard.recommendations
     assert not any("No sales records" in warning for warning in dashboard.data_warnings)
+    assert any("Synthetic demo" in warning for warning in dashboard.data_warnings)
     for recommendation in dashboard.recommendations:
+        assert recommendation.reliability_warnings
+        assert any("synthetic demo inputs" in warning for warning in recommendation.reliability_warnings)
+        assert "Forecast quality: low" in recommendation.explanation
         assert recommendation.supplier_lead_time_days is not None
         assert recommendation.supplier_id
         assert not any("Minimum order quantity is not configured" in warning for warning in recommendation.reliability_warnings)

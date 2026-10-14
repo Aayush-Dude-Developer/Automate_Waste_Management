@@ -1,4 +1,4 @@
-"""Seed isolated, deterministic purchase-recommendation demo data."""
+"""Seed isolated, deterministic purchase-recommendation sample data."""
 
 import argparse
 from datetime import date, datetime, timedelta, timezone

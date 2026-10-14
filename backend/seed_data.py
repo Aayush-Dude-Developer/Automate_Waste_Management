@@ -1,8 +1,4 @@
-"""
-One-Year Realistic Synthetic Data Seeder for Firestore / SustainBite
-Tenant: taiken_kharadi
-Timeframe: Past 365 Days (~Oct 2025 - Oct 2026)
-"""
+"""Seed clearly labeled synthetic sample data for SustainBite."""
 
 import os
 import sys
@@ -18,7 +14,7 @@ sys.path.insert(0, project_root)
 from backend.config import settings
 from backend.repositories.database import db
 
-RESTAURANT_ID = settings.DEFAULT_RESTAURANT_ID or "taiken_kharadi"
+RESTAURANT_ID = settings.DEFAULT_RESTAURANT_ID
 
 # 1. Base Inventory Definitions
 INVENTORY_SEED = [
@@ -47,7 +43,8 @@ GLOBAL_CHARITIES = [
         "accepts_cooked_food": True,
         "requires_cold_chain": False,
         "operating_hours": "18:00 - 23:30",
-        "verified": True
+        "verified": False,
+        "synthetic_sample_data": True,
     },
     {
         "id": "charity_feeding_india",
@@ -59,7 +56,8 @@ GLOBAL_CHARITIES = [
         "accepts_cooked_food": True,
         "requires_cold_chain": True,
         "operating_hours": "11:00 - 22:00",
-        "verified": True
+        "verified": False,
+        "synthetic_sample_data": True,
     },
     {
         "id": "charity_savitribai_orphanage",
@@ -71,7 +69,8 @@ GLOBAL_CHARITIES = [
         "accepts_cooked_food": True,
         "requires_cold_chain": False,
         "operating_hours": "08:00 - 20:00",
-        "verified": True
+        "verified": False,
+        "synthetic_sample_data": True,
     }
 ]
 
@@ -89,13 +88,13 @@ def seed_database():
     restaurant_profile = {
         "id": RESTAURANT_ID,
         "name": "Straits Garden Kitchen",
-        "outlet_name": "Tanjong Pagar",
-        "location": "Tanjong Pagar, Singapore",
-        "address": "Tanjong Pagar, Singapore",
-        "company_name": "Culinary Divergence Pvt. Ltd.",
+        "outlet_name": "Kharadi",
+        "location": "Kharadi, Pune, India",
+        "address": "Kharadi, Pune, India",
         "cuisine_type": "Pan-Asian / Japanese / Thai / Chinese",
-        "timezone": "Asia/Singapore",
+        "timezone": "Asia/Kolkata",
         "currency": "INR",
+        "synthetic_sample_data": True,
         "operating_shifts": [
             {"shift": "Lunch", "start": "12:00", "end": "16:00"},
             {"shift": "Dinner", "start": "19:00", "end": "23:30"}
@@ -119,6 +118,7 @@ def seed_database():
             "current_quantity_in_store": round(item["total_current_quantity"] * 0.7, 2),
             "current_quantity_in_use": round(item["total_current_quantity"] * 0.3, 2),
             "status": "in_stock",
+            "synthetic_sample_data": True,
             "yield_factor": 0.85 if item["category"] in ["Meat & Poultry", "Seafood"] else 1.0,
             "yield_type": (
                 "negative" if item["yield_percentage"] < 0 else
@@ -174,6 +174,7 @@ def seed_database():
                 "checked_by": random.choice(CHEFS),
                 "financial_loss_inr": loss_inr,
                 "status": "VERIFIED",
+                "synthetic_sample_data": True,
                 "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/waste_records", waste_id, waste_doc)
@@ -200,6 +201,7 @@ def seed_database():
                 ],
                 "total_cost_inr": round((rice_qty * 160.0) + (chicken_or_veg_qty * 280.0), 2),
                 "deducted_from_inventory": True,
+                "synthetic_sample_data": True,
                 "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/staff_meal_records", meal_id, staff_doc)
@@ -221,7 +223,8 @@ def seed_database():
                     {"dish_name": "Thai Green Curry", "base_demand": round(covers * 0.18, 2), "cook_batches": 3, "total_prep": round(covers * 0.198, 2)},
                     {"dish_name": "Wok Tossed Noodles", "base_demand": round(covers * 0.14, 2), "cook_batches": 2, "total_prep": round(covers * 0.154, 2)}
                 ],
-                "created_at": current_dt.isoformat()
+                    "synthetic_sample_data": True,
+                    "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/buffet_plans", plan_id, buffet_doc)
             total_buffet_plans += 1
@@ -244,6 +247,7 @@ def seed_database():
                 "driver_name": "Ramesh Kumar (Volunteer)",
                 "food_temperature_celsius": 68.5,
                 "handover_status": "COMPLETED",
+                "synthetic_sample_data": True,
                 "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/donation_records", donation_id, don_doc)

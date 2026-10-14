@@ -90,10 +90,10 @@ def migrate_inventory_documents(
         profile.update({
             "id": restaurant_id,
             "name": "Straits Garden Kitchen",
-            "outlet_name": "Tanjong Pagar",
-            "location": "Tanjong Pagar, Singapore",
-            "address": "Tanjong Pagar, Singapore",
-            "timezone": "Asia/Singapore",
+            "outlet_name": "Kharadi",
+            "location": "Kharadi, Pune, India",
+            "address": "Kharadi, Pune, India",
+            "timezone": "Asia/Kolkata",
             "currency": profile.get("currency", "INR"),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
@@ -124,14 +124,14 @@ def migrate_inventory_documents(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Add yield metadata and Singapore restaurant identity without deleting existing fields."
+        description="Add yield metadata and India restaurant identity without deleting existing fields."
     )
     parser.add_argument("--restaurant-id", required=True)
     parser.add_argument("--apply", action="store_true", help="Persist changes; default is read-only preview.")
     parser.add_argument(
         "--restaurant-profile",
         action="store_true",
-        help="Also rename the existing restaurant profile to Straits Garden Kitchen in Singapore.",
+        help="Also update the existing restaurant profile to Straits Garden Kitchen in Kharadi, Pune, India.",
     )
     args = parser.parse_args()
     profile_path = f"restaurants/{args.restaurant_id}/profile"
@@ -156,7 +156,7 @@ def main():
     mode = "Updated" if args.apply else "Would update"
     print(f"{mode} {count} inventory documents for {args.restaurant_id}.")
     if args.restaurant_profile:
-        print(f"{'Updated' if args.apply else 'Would update'} restaurant profile to Straits Garden Kitchen, Tanjong Pagar, Singapore.")
+        print(f"{'Updated' if args.apply else 'Would update'} restaurant profile to Straits Garden Kitchen, Kharadi, Pune, India.")
     if not args.apply:
         print("No data was changed. Re-run with --apply to persist this additive migration.")
 

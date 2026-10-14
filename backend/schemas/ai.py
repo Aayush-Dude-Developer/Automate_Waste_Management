@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
 class InterventionProposal(BaseModel):
@@ -14,6 +14,7 @@ class InterventionProposal(BaseModel):
 class SurplusInvestigationResponse(BaseModel):
     id: str
     target_item_name: str
+    analysis_source: Literal["gemini", "deterministic"] = "deterministic"
     investigation_summary: str
     verified_facts: List[str]
     hypotheses: List[str]

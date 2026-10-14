@@ -10,6 +10,12 @@ export default function DonationCentresView() {
   const [quantity, setQuantity] = useState('');
   const [isCooked, setIsCooked] = useState(true);
   const [requiresColdChain, setRequiresColdChain] = useState(false);
+  const [dietaryPreference, setDietaryPreference] = useState('');
+  const [area, setArea] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [country, setCountry] = useState('');
+  const [pincode, setPincode] = useState('');
   const [useAI, setUseAI] = useState(false);
   const [matches, setMatches] = useState<DonationMatch[]>([]);
   const [searched, setSearched] = useState(false);
@@ -28,10 +34,21 @@ export default function DonationCentresView() {
     setNotice('');
     setSearched(false);
     try {
-      const query = new URLSearchParams({ use_ai: String(useAI), location_name: 'Pune' });
+      const query = new URLSearchParams({ use_ai: String(useAI) });
       const result = await apiRequest<DonationMatch[]>(`/api/donations/match?${query}`, {
         method: 'POST',
-        body: JSON.stringify({ item_name: itemName, quantity_kg: Number(quantity), is_cooked: isCooked, requires_cold_chain: requiresColdChain }),
+        body: JSON.stringify({
+          item_name: itemName,
+          quantity_kg: Number(quantity),
+          is_cooked: isCooked,
+          requires_cold_chain: requiresColdChain,
+          is_vegetarian: dietaryPreference === '' ? null : dietaryPreference === 'vegetarian',
+          location_area: area || null,
+          city: city || null,
+          state: state || null,
+          country: country || null,
+          pincode: pincode || null,
+        }),
       });
       setMatches(result);
       setSearched(true);
@@ -82,21 +99,44 @@ export default function DonationCentresView() {
           <label className="block text-sm font-medium text-slate-700">Quantity (kg)<input required type="number" min="0.01" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`${fieldClass} mt-1`} /></label>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={isCooked} onChange={(e) => setIsCooked(e.target.checked)} />Prepared/cooked food</label>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={requiresColdChain} onChange={(e) => setRequiresColdChain(e.target.checked)} /><ThermometerSnowflake className="h-4 w-4 text-sky-500" />Requires strict cold-chain</label>
+          <label className="block text-sm font-medium text-slate-700">Food type<select value={dietaryPreference} onChange={(e) => setDietaryPreference(e.target.value)} className={`${fieldClass} mt-1`}><option value="">Not specified</option><option value="vegetarian">Vegetarian</option><option value="non-vegetarian">Non-vegetarian</option></select></label>
         </div>
         <div className="my-5 border-t pt-4">
           <label className="flex items-center justify-between text-sm font-medium text-indigo-900"><span className="flex items-center"><Sparkles className="mr-2 h-4 w-4 text-indigo-600" />AI discovery</span><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /></label>
-          <p className="mt-2 text-xs text-slate-500">AI-sourced centre details are unverified and must be independently checked. The backend may return its configured fallback dataset.</p>
+          <p className="mt-2 text-xs text-slate-500">AI searches Google Maps and centre websites. Location is required; unknown details stay blank and AI results are not silently replaced with demo centres.</p>
         </div>
+        {useAI && <div className="mb-5 space-y-3 rounded-md bg-indigo-50 p-3">
+          <p className="text-sm font-semibold text-indigo-900">Restaurant location for nearby search</p>
+          <label className="block text-sm font-medium text-slate-700">Area / locality (optional)<input value={area} onChange={(e) => setArea(e.target.value)} className={`${fieldClass} mt-1`} placeholder="Neighbourhood or area" /></label>
+          <label className="block text-sm font-medium text-slate-700">City<input required value={city} onChange={(e) => setCity(e.target.value)} className={`${fieldClass} mt-1`} /></label>
+          <label className="block text-sm font-medium text-slate-700">Country<input required value={country} onChange={(e) => setCountry(e.target.value)} className={`${fieldClass} mt-1`} /></label>
+          <label className="block text-sm font-medium text-slate-700">State / region (optional)<input value={state} onChange={(e) => setState(e.target.value)} className={`${fieldClass} mt-1`} /></label>
+          <label className="block text-sm font-medium text-slate-700">Pincode / postal code (optional)<input value={pincode} onChange={(e) => setPincode(e.target.value)} className={`${fieldClass} mt-1`} /></label>
+        </div>}
         <button disabled={isSearching} className="flex w-full items-center justify-center rounded-md bg-restaurant-primary py-2 font-medium text-white disabled:opacity-50">{isSearching ? 'Searching…' : <><HeartHandshake className="mr-2 h-4 w-4" />Find Matches</>}</button>
       </form>
 
       <div className="space-y-4 lg:col-span-2">
+        {useAI && searched && <p className="text-xs text-slate-500">AI results are ordered by approximate straight-line distance when Google Maps coordinates are available; unknown distances appear last.</p>}
         {isSearching ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-12 text-center text-slate-600">Requesting matches from the backend…</div>
           : !searched ? <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 p-12 text-center"><HeartHandshake className="mx-auto mb-4 h-12 w-12 text-slate-300" /><p className="font-medium text-slate-800">Ready to find a match</p><p className="mt-1 text-sm text-slate-500">Enter surplus details to request eligible centres.</p></div>
             : matches.length === 0 ? <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-500">No centres matched this surplus.</div>
               : matches.map((match) => <article key={match.centre.id} className={`rounded-lg border bg-white p-6 shadow-sm ${match.is_eligible ? 'border-emerald-200' : 'border-slate-200 opacity-75'}`}>
                 <div className="mb-2 flex flex-wrap items-center gap-2"><h3 className="text-lg font-bold text-slate-900">{match.centre.name}</h3>{match.is_eligible ? <span className="flex items-center rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800"><CheckCircle2 className="mr-1 h-3 w-3" />Eligible</span> : <span className="flex items-center rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-800"><XCircle className="mr-1 h-3 w-3" />Not eligible</span>}{!match.centre.verified && <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-800">Unverified</span>}</div>
-                <div className="space-y-2 text-sm text-slate-600"><p className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-slate-400" />{match.centre.address} · {match.distance_km} km</p><p className="flex items-center"><Truck className="mr-2 h-4 w-4 text-slate-400" />{match.centre.pickup_service_available ? 'Pickup available' : 'Drop-off required'} · Score {match.match_score}</p>{match.eligibility_notes.map((note, index) => <p key={index}>{note}</p>)}</div>
+                <div className="space-y-2 text-sm text-slate-600">
+                  {match.centre.address && <p className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-slate-400" />{match.centre.address}{match.distance_km !== null ? ` · approx. ${match.distance_km} km straight-line` : ' · distance unavailable'}</p>}
+                  <p className="flex items-center"><Truck className="mr-2 h-4 w-4 text-slate-400" />{match.centre.pickup_service_available === true ? 'Pickup available' : match.centre.pickup_service_available === false ? 'Drop-off required' : 'Pickup availability not found'}</p>
+                  <p>Phone: {match.centre.phone ?? 'Not found'}</p>
+                  <p>Donation timings: {match.centre.opening_hours ?? 'Not found'}</p>
+                  <p>Minimum accepted weight: {match.centre.minimum_quantity_kg !== null && match.centre.minimum_quantity_kg !== undefined ? `${match.centre.minimum_quantity_kg} kg` : 'Not found'}</p>
+                  <p>Accepts vegetarian: {match.centre.accepts_vegetarian === null || match.centre.accepts_vegetarian === undefined ? 'Not found' : match.centre.accepts_vegetarian ? 'Yes' : 'No'}</p>
+                  <p>Accepts non-vegetarian: {match.centre.accepts_non_vegetarian === null || match.centre.accepts_non_vegetarian === undefined ? 'Not found' : match.centre.accepts_non_vegetarian ? 'Yes' : 'No'}</p>
+                  {match.centre.google_maps_link && <a href={match.centre.google_maps_link} target="_blank" rel="noreferrer" className="inline-block text-blue-700 underline">Open Google Maps</a>}
+                  {match.centre.website_url && <a href={match.centre.website_url} target="_blank" rel="noreferrer" className="ml-4 inline-block text-blue-700 underline">Centre website</a>}
+                  {match.centre.source_urls.filter((url) => url !== match.centre.website_url).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" className="ml-4 inline-block text-blue-700 underline">Source</a>)}
+                  <p>Match score: {match.match_score}</p>
+                  {match.eligibility_notes.map((note, index) => <p key={index}>{note}</p>)}
+                </div>
                 {match.is_eligible && <button onClick={() => setSelectedMatch(match)} className="mt-4 flex items-center rounded-md bg-restaurant-secondary px-4 py-2 text-sm font-medium text-white"><FileText className="mr-2 h-4 w-4" />Record Handover</button>}
               </article>)}
       </div>

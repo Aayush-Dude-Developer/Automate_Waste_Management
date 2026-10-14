@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
+from google.genai import errors as genai_errors
+
 from backend.routers import analytics
+from backend.schemas.documents import AmendRecordsRequest
 from backend.services import document_service
 from backend.repositories import database
 
@@ -82,21 +85,143 @@ def test_waste_trend_has_no_hardcoded_sample_data(monkeypatch):
     assert sum(point.waste for point in result) == 0.25
 
 
-def test_document_upload_does_not_return_fabricated_ocr(monkeypatch):
+def test_document_upload_reports_missing_extraction_configuration(monkeypatch):
     database = FakeDatabase({})
     monkeypatch.setattr(document_service, "db", database)
+    monkeypatch.setattr(document_service.settings, "GEMINI_API_KEY", "")
 
-    result = document_service.process_document_upload(
-        b"file contents",
-        "waste.jpg",
-        "waste",
-        "demo",
+    try:
+        document_service.process_document_upload(b"file contents", "waste.jpg", "waste", "demo")
+    except document_service.DocumentExtractionUnavailable as error:
+        assert "GEMINI_API_KEY" in str(error)
+    else:
+        raise AssertionError("Upload succeeded without document extraction configuration.")
+
+    saved_document = next(
+        data for (path, _document_id), data in database.saved.items()
+        if path == "restaurants/demo/documents"
+    )
+    assert saved_document["status"] == "extraction_failed"
+
+
+def test_document_upload_returns_gemini_extracted_records(monkeypatch):
+    database = FakeDatabase({})
+    monkeypatch.setattr(document_service, "db", database)
+    monkeypatch.setattr(document_service.settings, "GEMINI_API_KEY", "configured-key")
+    records = [{"date": "2026-10-14", "item_name": "Tomatoes", "quantity": 2, "unit": "kg"}]
+    monkeypatch.setattr(
+        document_service,
+        "extract_document_records",
+        lambda *_: (records, 0.92, ["checked_by"]),
     )
 
-    assert result.extracted_records == []
-    assert result.confidence_score == 0
-    assert "OCR is not available" in result.message
-    assert ("restaurants/demo/documents", result.document_id) in database.saved
+    result = document_service.process_document_upload(b"file contents", "waste.jpg", "waste", "demo")
+
+    assert result.extracted_records == records
+    assert result.confidence_score == 0.92
+    assert result.ambiguous_fields == ["checked_by"]
+    assert "date" in result.available_fields
+    assert "checked_by" in result.available_fields
+    saved_document = next(
+        data for (path, _document_id), data in database.saved.items()
+        if path == "restaurants/demo/documents"
+    )
+    assert saved_document["status"] == "extracted"
+
+
+def test_document_extraction_sends_uploaded_image_to_gemini(monkeypatch):
+    records = [{"item_name": "Tomatoes", "unit_cost_inr": 42}]
+
+    class FakeModel:
+        def generate_content(self, **request):
+            self.request = request
+            return type(
+                "Response",
+                (),
+                {"text": '{"extracted_records": [{"item_name": "Tomatoes", "unit_cost_inr": 42}], "confidence_score": 0.9, "ambiguous_fields": []}'},
+            )()
+
+    model = FakeModel()
+    monkeypatch.setattr(document_service.settings, "GEMINI_API_KEY", "configured-key")
+    monkeypatch.setattr(
+        document_service.genai, "Client", lambda **_kwargs: type("Client", (), {"models": model})()
+    )
+
+    extracted, confidence, ambiguous_fields = document_service.extract_document_records(
+        b"image data", "inventory.jpg", "inventory_items"
+    )
+
+    assert extracted == records
+    assert confidence == 0.9
+    assert ambiguous_fields == []
+    image_part = model.request["contents"][1]
+    assert "closest matching canonical field names" in model.request["contents"][0]
+    assert "Source documents can use different names" in model.request["contents"][0]
+    assert image_part.inline_data.mime_type == "image/jpeg"
+    assert image_part.inline_data.data == b"image data"
+
+
+def test_document_extraction_reports_gemini_503_as_temporary_unavailability(monkeypatch):
+    class FakeModel:
+        def generate_content(self, **_request):
+            raise genai_errors.ServerError(
+                503,
+                {"error": {"message": "Model temporarily unavailable."}},
+            )
+
+    monkeypatch.setattr(document_service.settings, "GEMINI_API_KEY", "configured-key")
+    monkeypatch.setattr(
+        document_service.genai,
+        "Client",
+        lambda **_kwargs: type("Client", (), {"models": FakeModel()})(),
+    )
+
+    try:
+        document_service.extract_document_records(b"image data", "waste.jpg", "waste")
+    except document_service.DocumentExtractionUnavailable as error:
+        assert "temporarily unavailable (503)" in str(error)
+        assert "try again shortly" in str(error)
+    else:
+        raise AssertionError("Gemini 503 was not reported as temporary unavailability.")
+
+
+def test_document_amendment_applies_customer_instruction(monkeypatch):
+    current_records = [{"item_name": "Tomatoes", "quantity": 2, "unit": "kg"}]
+    updated_records = [{"item_name": "Tomatoes", "quantity": 4, "unit": "kg"}]
+    captured = {}
+
+    def fake_generate(prompt, contents):
+        captured["prompt"] = prompt
+        captured["contents"] = contents
+        return {"updated_records": updated_records, "message": "Changed row 1 quantity to 4."}
+
+    monkeypatch.setattr(document_service, "_generate_json", fake_generate)
+    request = AmendRecordsRequest(
+        target_entity="waste_records",
+        current_records=current_records,
+        amendment="Change the quantity in row 1 to 4.",
+    )
+
+    result = document_service.amend_document_records(request)
+
+    assert result.updated_records == updated_records
+    assert "Change the quantity in row 1 to 4." in captured["prompt"]
+    assert "current_records" not in captured["prompt"]
+    assert current_records[0]["quantity"] == 2
+
+
+def test_document_amendment_rejects_empty_records():
+    request = AmendRecordsRequest(
+        target_entity="waste_records",
+        current_records=[],
+        amendment="Make a change",
+    )
+    try:
+        document_service.amend_document_records(request)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Empty amendment record set should fail before Gemini is called.")
 
 
 def test_firestore_initialization_failure_does_not_silently_use_local_database(monkeypatch):

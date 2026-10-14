@@ -306,8 +306,8 @@ def test_singapore_migration_adds_yields_and_updates_profile_without_changing_st
         if record.get("name") == "Straits Garden Kitchen"
     )
     assert updated_profile["name"] == "Straits Garden Kitchen"
-    assert updated_profile["location"] == "Tanjong Pagar, Singapore"
-    assert updated_profile["timezone"] == "Asia/Singapore"
+    assert updated_profile["location"] == "Kharadi, Pune, India"
+    assert updated_profile["timezone"] == "Asia/Kolkata"
     assert updated_profile["company_name"] == "Keep this company"
     assert updated_profile["currency"] == "INR"
 

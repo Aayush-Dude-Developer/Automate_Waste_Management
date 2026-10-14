@@ -25,6 +25,19 @@ function formatQty(value: number, unit: string) {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${unit}`;
 }
 
+function projectedStockSteps(recommendation: PurchaseRecommendation) {
+  let projectedStock = recommendation.forecast_start_usable_stock;
+  return Object.entries(recommendation.demand_forecast).map(([day, demand]) => {
+    const openingStock = projectedStock;
+    const incoming = recommendation.incoming_orders
+      .filter((order) => order.expected_delivery_date === day)
+      .reduce((total, order) => total + order.quantity, 0);
+    const expiryLoss = recommendation.expiry_losses_by_day[day] ?? 0;
+    projectedStock = openingStock + incoming - demand - expiryLoss;
+    return { day, openingStock, incoming, demand, expiryLoss, closingStock: projectedStock };
+  });
+}
+
 export default function PurchaseRecommendationsView() {
   const [period, setPeriod] = useState(7);
   const [dashboard, setDashboard] = useState<PurchaseRecommendationDashboard | null>(null);
@@ -159,6 +172,19 @@ export default function PurchaseRecommendationsView() {
     {stale && dashboard && <div role="status" className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Could not refresh. Showing the last successful forecast generated {new Date(dashboard.generated_at).toLocaleString()}.</div>}
     {dashboard?.data_warnings.map((warning) => <div key={warning} className="mb-3 flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{warning}</div>)}
 
+    <details className="mb-5 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
+      <summary className="cursor-pointer font-semibold text-slate-800">How forecast consumption, stockout and order dates are calculated</summary>
+      <ol className="mt-3 list-decimal space-y-2 pl-5">
+        <li>For each active recipe, forecast portions by taking the average net portions sold on that weekday across the preceding 56 calendar days (normally eight observations; dates with no sale count as zero), then multiply by a recipe trend factor. The factor is recent 28-day portions divided by the preceding 28-day portions, bounded to 0.8–1.2; if the earlier period has no sales, it defaults to 1.0.</li>
+        <li>Convert recipe quantities to raw inventory units: ingredient quantity per batch ÷ batch servings, then apply the configured yield conversion once. Add all linked recipe demands for each day.</li>
+        <li>The “Forecast daily consumption” column is the average daily ingredient demand over the selected forecast period only. Purchase quantity uses a longer, item-specific horizon: selected forecast days + that ingredient’s supplier lead time, capped at 90 days.</li>
+        <li>Project usable stock day by day, adding confirmed incoming orders on their expected delivery dates and subtracting forecast consumption. Remaining stock in a batch is removed after its expiry date; confirmed incoming orders use the configured shelf life when available. Projected stockout is the first date demand cannot be met. With lot tracking, verified unexpired batch balances and untracked stock count as usable.</li>
+        <li>Recommended order date = the first date projected stock falls below max(reorder threshold, safety stock) − that item’s lead time. It can be in the past; that means the order date calculated to protect the buffer has already passed.</li>
+        <li>Recommended quantity starts with max(0, demand over the item-specific purchase horizon + max(reorder threshold, safety stock) + stock forecast to expire in that horizon − stock usable at the forecast start − confirmed incoming orders due in the horizon). It is capped at the smaller of that replenishment need and forecast demand within the purchase horizon before the new order’s expiry. A long shelf life does not extend the forecast horizon. Supplier minimum and pack size are applied only when they fit under that cap; otherwise the cap is kept and a warning explains the supplier constraint.</li>
+      </ol>
+      <p className="mt-3 text-xs text-slate-600">Expand an ingredient row for its dates, actual demand by day, stock source, calculation arithmetic and data limitations. Displayed values are rounded; calculations use full precision. This recommends the next order only; refresh after stock or expiry records change to recalculate the following order.</p>
+    </details>
+
     {dashboard && <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
       <SummaryCard label="Ingredients requiring replenishment" value={dashboard.ingredients_requiring_replenishment} tone="text-amber-700" />
       <SummaryCard label="Upcoming stockout risks" value={dashboard.upcoming_stockout_risks} tone="text-rose-700" />
@@ -256,22 +282,32 @@ function RecommendationRow({
       <td className="px-3 py-3">{nextAction && <button disabled={busy} onClick={() => void onAction(recommendation, nextAction)} className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-emerald-700 px-3 py-2 font-medium text-white disabled:opacity-50">{busy ? 'Saving…' : nextAction === 'approved' ? <><Check className="h-3 w-3" />Approve</> : nextAction === 'ordered' ? 'Mark ordered' : 'Mark received'}</button>}</td>
     </tr>
     {expanded && <tr><td colSpan={12} className="bg-slate-50 px-5 py-4">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div><h3 className="font-semibold text-slate-800">Recommendation explanation</h3><p className="mt-2 text-sm text-slate-600">{recommendation.explanation}</p><p className="mt-2 text-xs text-slate-500">{recommendation.stock_source}</p>
-          <h4 className="mt-4 text-sm font-semibold text-slate-800">Demand basis</h4>
-          {!recommendation.sales_basis.length ? <p className="mt-1 text-sm text-amber-800">No linked recipe/sales data supports a demand estimate.</p> : <ul className="mt-1 space-y-1 text-sm text-slate-600">{recommendation.sales_basis.map((basis) => <li key={basis.recipe_id}>{basis.recipe_name}: {basis.forecast_portions} forecast portions × {formatQty(basis.raw_quantity_per_portion, basis.unit)} raw ingredient per portion; trend factor {basis.trend_factor}×{basis.yield_stages_applied.length ? ` (yield stage ${basis.yield_stages_applied.join(', ')})` : ''}</li>)}</ul>}
-          <div className="mt-3"><h4 className="text-sm font-semibold text-slate-800">Daily ingredient forecast</h4><div className="mt-1 flex flex-wrap gap-2">{Object.entries(recommendation.demand_forecast).map(([day, quantity]) => <span key={day} className="rounded bg-white px-2 py-1 text-xs text-slate-600">{day}: {formatQty(quantity, recommendation.stock_unit)}</span>)}</div></div>
+      <h3 className="font-semibold text-slate-800">Recommendation summary</h3>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">{recommendation.explanation_points.map((point) => <li key={point}>{point}</li>)}</ul>
+      {recommendation.reliability_warnings.length > 0 && <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900">{recommendation.reliability_warnings[0]}</p>}
+      <details className="mt-3 rounded border border-slate-200 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">Calculation details and data notes</summary>
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          <div>
+            <p className="text-xs text-slate-500">{recommendation.stock_source}</p>
+            <h4 className="mt-3 text-sm font-semibold text-slate-800">Demand basis</h4>
+            {!recommendation.sales_basis.length ? <p className="mt-1 text-sm text-amber-800">No linked recipe/sales data supports a demand estimate.</p> : <ul className="mt-1 space-y-1 text-sm text-slate-600">{recommendation.sales_basis.map((basis) => <li key={basis.recipe_id}>{basis.recipe_name}: {basis.forecast_portions} forecast portions × {formatQty(basis.raw_quantity_per_portion, basis.unit)} raw ingredient per portion; trend factor {basis.trend_factor}×{basis.yield_stages_applied.length ? ` (yield stage ${basis.yield_stages_applied.join(', ')})` : ''}</li>)}</ul>}
+            <h4 className="mt-3 text-sm font-semibold text-slate-800">Daily stock projection</h4>
+            <p className="mt-1 text-xs text-slate-500">Opening stock + incoming − forecast demand − expired remainder = projected closing stock.</p>
+            <ul className="mt-1 space-y-1 text-xs text-slate-600">{projectedStockSteps(recommendation).map((step) => <li key={step.day} className="rounded bg-slate-50 px-2 py-1">{step.day}: {formatQty(step.openingStock, recommendation.stock_unit)} + {formatQty(step.incoming, recommendation.stock_unit)} − {formatQty(step.demand, recommendation.stock_unit)} − {formatQty(step.expiryLoss, recommendation.stock_unit)} expired = <span className={step.closingStock <= 0 ? 'font-semibold text-rose-700' : ''}>{formatQty(step.closingStock, recommendation.stock_unit)}</span></li>)}</ul>
+            {(recommendation.recommended_delivery_date || recommendation.recommended_expiry_date) && <p className="mt-2 text-xs text-slate-600">Proposed next order: estimated delivery {dateLabel(recommendation.recommended_delivery_date)}; estimated expiry {dateLabel(recommendation.recommended_expiry_date)}.</p>}
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-800">Incoming purchase orders</h4>
+            {recommendation.incoming_orders.length ? <ul className="mt-1 space-y-1 text-sm text-slate-600">{recommendation.incoming_orders.map((order) => <li key={order.recommendation_id}>{order.order_reference}: {formatQty(order.quantity, recommendation.stock_unit)} due {dateLabel(order.expected_delivery_date)}{order.expiry_date ? ` (estimated expiry ${dateLabel(order.expiry_date)})` : ' (expiry unknown)'}</li>)}</ul> : <p className="mt-1 text-sm text-slate-500">No confirmed incoming orders recorded.</p>}
+            <h4 className="mt-3 text-sm font-semibold text-slate-800">Upcoming batch expiries</h4>
+            {recommendation.expiry_batches.length ? <ul className="mt-1 space-y-1 text-sm text-slate-600">{recommendation.expiry_batches.map((batch) => <li key={`${batch.purchase_id}:${batch.batch_number}:${batch.expiry_date}`} className={batch.expired ? 'text-rose-700' : ''}>{batch.batch_number || batch.purchase_id}: received {formatQty(batch.quantity_received, batch.unit)}, remaining {formatQty(batch.remaining_usable_quantity, batch.unit)}, {batch.expired ? 'expired' : 'expires'} {dateLabel(batch.expiry_date)}</li>)}</ul> : <p className="mt-1 text-sm text-slate-500">No remaining purchase lots expire within 60 days.</p>}
+            {recommendation.reliability_warnings.length > 0 && <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3"><h4 className="font-semibold text-amber-900">All data notes</h4><ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900">{recommendation.reliability_warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
+          </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-slate-800">Incoming purchase orders</h3>
-          {recommendation.incoming_orders.length ? <ul className="mt-1 space-y-1 text-sm text-slate-600">{recommendation.incoming_orders.map((order) => <li key={order.recommendation_id}>{order.order_reference}: {formatQty(order.quantity, recommendation.stock_unit)} due {dateLabel(order.expected_delivery_date)}</li>)}</ul> : <p className="mt-1 text-sm text-slate-500">No confirmed incoming orders recorded.</p>}
-          <h3 className="mt-4 font-semibold text-slate-800">Upcoming batch expiries</h3>
-          {recommendation.expiry_batches.length ? <ul className="mt-1 space-y-1 text-sm text-slate-600">{recommendation.expiry_batches.map((batch) => <li key={`${batch.purchase_id}:${batch.batch_number}:${batch.expiry_date}`} className={batch.expired ? 'text-rose-700' : ''}>{batch.batch_number || batch.purchase_id}: received {formatQty(batch.quantity_received, batch.unit)}, remaining {formatQty(batch.remaining_usable_quantity, batch.unit)}, {batch.expired ? 'expired' : 'expires'} {dateLabel(batch.expiry_date)}</li>)}</ul> : <p className="mt-1 text-sm text-slate-500">No remaining purchase lots expire within 60 days.</p>}
-          {recommendation.reliability_warnings.length > 0 && <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3"><h3 className="font-semibold text-amber-900">Data limitations</h3><ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900">{recommendation.reliability_warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
-          {recommendation.status === 'approved' && <div className="mt-4 grid gap-2 sm:grid-cols-2"><label className="text-xs font-medium text-slate-600">Supplier order reference<input value={orderReference} onChange={(event) => onOrderReferenceChange(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label><label className="text-xs font-medium text-slate-600">Expected delivery date<input type="date" value={deliveryDate} onChange={(event) => onDeliveryDateChange(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label></div>}
-          {recommendation.status === 'ordered' && <label className="mt-4 block text-xs font-medium text-slate-600">Verified purchase line ID<input value={purchaseLineId} onChange={(event) => onPurchaseLineIdChange(event.target.value)} className={`${inputClass} mt-1 w-full`} /><span className="mt-1 block font-normal">Find this ID on the <Link to="/purchases" className="text-emerald-800 underline">Purchase Invoices</Link> page after verifying the received invoice.</span></label>}
-        </div>
-      </div>
+      </details>
+      {recommendation.status === 'approved' && <div className="mt-4 grid gap-2 sm:grid-cols-2"><label className="text-xs font-medium text-slate-600">Supplier order reference<input value={orderReference} onChange={(event) => onOrderReferenceChange(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label><label className="text-xs font-medium text-slate-600">Expected delivery date<input type="date" value={deliveryDate} onChange={(event) => onDeliveryDateChange(event.target.value)} className={`${inputClass} mt-1 w-full`} /></label></div>}
+      {recommendation.status === 'ordered' && <label className="mt-4 block text-xs font-medium text-slate-600">Verified purchase line ID<input value={purchaseLineId} onChange={(event) => onPurchaseLineIdChange(event.target.value)} className={`${inputClass} mt-1 w-full`} /><span className="mt-1 block font-normal">Find this ID on the <Link to="/purchases" className="text-emerald-800 underline">Purchase Invoices</Link> page after verifying the received invoice.</span></label>}
     </td></tr>}
   </>;
 }

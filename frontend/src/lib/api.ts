@@ -229,6 +229,7 @@ export interface RestaurantProfile {
   address: string;
   timezone: string;
   currency: string;
+  synthetic_sample_data?: boolean;
 }
 
 export interface WasteRecord {
@@ -276,6 +277,7 @@ export interface PurchaseRecommendation {
   forecast_start_date: string;
   forecast_period_days: number;
   current_usable_stock: number;
+  forecast_start_usable_stock: number;
   stock_unit: string;
   stock_source: string;
   forecast_daily_consumption: number;
@@ -285,13 +287,17 @@ export interface PurchaseRecommendation {
   supplier_lead_time_days: number | null;
   projected_stockout_date: string | null;
   recommended_order_date: string | null;
+  recommended_delivery_date: string | null;
+  recommended_expiry_date: string | null;
   recommended_purchase_quantity: number;
   estimated_purchase_cost: number | null;
   priority: 'critical' | 'high' | 'medium' | 'low';
   status: PurchaseRecommendationStatus;
   explanation: string;
+  explanation_points: string[];
   reliability_warnings: string[];
   demand_forecast: Record<string, number>;
+  expiry_losses_by_day: Record<string, number>;
   sales_basis: Array<{
     recipe_id: string;
     recipe_name: string;
@@ -305,6 +311,7 @@ export interface PurchaseRecommendation {
     recommendation_id: string;
     quantity: number;
     expected_delivery_date: string;
+    expiry_date: string | null;
     order_reference: string;
   }>;
   expiry_batches: Array<{
@@ -349,14 +356,26 @@ export interface DonationMatch {
   centre: {
     id: string;
     name: string;
-    contact_person: string;
-    phone: string;
-    address: string;
-    pickup_service_available: boolean;
+    contact_person?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    accepts_cooked_food?: boolean | null;
+    accepts_raw_produce?: boolean | null;
+    requires_cold_chain?: boolean | null;
+    minimum_quantity_kg?: number | null;
+    pickup_service_available?: boolean | null;
+    google_maps_link?: string | null;
+    opening_hours?: string | null;
+    accepts_vegetarian?: boolean | null;
+    accepts_non_vegetarian?: boolean | null;
+    website_url?: string | null;
+    source_urls: string[];
     verified: boolean;
   };
   match_score: number;
-  distance_km: number;
+  distance_km: number | null;
   eligibility_notes: string[];
   is_eligible: boolean;
 }
@@ -373,6 +392,7 @@ export interface Intervention {
 export interface Investigation {
   id: string;
   target_item_name: string;
+  analysis_source: 'gemini' | 'deterministic';
   investigation_summary: string;
   verified_facts: string[];
   hypotheses: string[];

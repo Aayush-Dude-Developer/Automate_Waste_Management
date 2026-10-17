@@ -50,6 +50,23 @@ TARGET_BY_HINT = {
     "staff_meals": "staff_meal_records",
     "inventory_items": "inventory_items",
 }
+EXAMPLE_COLLECTION_BY_TARGET = {
+    "waste_records": ("waste_records", "date"),
+    "staff_meal_records": ("staff_meal_records", "date"),
+    "inventory_items": ("inventory_items", "updated_at"),
+}
+EXAMPLE_OMITTED_FIELDS = {
+    "id",
+    "restaurant_id",
+    "source_document_id",
+    "inventory_item_id",
+    "ingredient_id",
+    "supplier_id",
+    "recipe_id",
+    "created_at",
+    "updated_at",
+    "status",
+}
 
 
 def _generate_json(prompt: str, contents: list[Any]) -> dict[str, Any]:
@@ -62,7 +79,7 @@ def _generate_json(prompt: str, contents: list[Any]) -> dict[str, Any]:
         client = genai.Client(
             api_key=api_key,
             http_options=types.HttpOptions(
-                timeout=60_000,
+                timeout=300_000,
                 retry_options=types.HttpRetryOptions(attempts=1),
             ),
         )
@@ -100,8 +117,46 @@ def hash_file_content(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _get_format_examples(
+    restaurant_id: Optional[str], target: str, model: type
+) -> list[dict[str, Any]]:
+    if not restaurant_id:
+        return []
+
+    collection, date_field = EXAMPLE_COLLECTION_BY_TARGET[target]
+    records = db.query_collection(
+        f"restaurants/{restaurant_id}/{collection}",
+        order_by=(date_field, "DESCENDING"),
+        limit=5,
+    )
+    allowed_fields = set(model.model_fields)
+
+    def remove_identifiers(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: remove_identifiers(item)
+                for key, item in value.items()
+                if key not in EXAMPLE_OMITTED_FIELDS
+            }
+        if isinstance(value, list):
+            return [remove_identifiers(item) for item in value]
+        return value
+
+    return [
+        {
+            key: remove_identifiers(value)
+            for key, value in record.items()
+            if key in allowed_fields
+            and key not in EXAMPLE_OMITTED_FIELDS
+            and value is not None
+            and value != ""
+        }
+        for record in records
+    ]
+
+
 def extract_document_records(
-    content: bytes, filename: str, hint: str
+    content: bytes, filename: str, hint: str, restaurant_id: Optional[str] = None
 ) -> tuple[list[dict[str, Any]], float, list[str]]:
     mime_type = SUPPORTED_MIME_TYPES.get("." + filename.rsplit(".", 1)[-1].lower())
     if not mime_type:
@@ -115,6 +170,7 @@ def extract_document_records(
     required_fields = schema.get("required", [])
     if target == "inventory_items":
         required_fields = [*required_fields, "unit_cost_inr or unit_cost"]
+    format_examples = _get_format_examples(restaurant_id, target, model)
 
     prompt = f"""
 Extract records from the attached restaurant document for the {target} table.
@@ -132,6 +188,15 @@ Required fields are {json.dumps(required_fields)}. Return only a JSON object wit
 
 Do not invent values. Omit fields that are absent or unreadable and list them in ambiguous_fields.
 If no relevant records are present, return an empty extracted_records array and explain why in ambiguous_fields.
+
+Existing records from this restaurant (format examples only; do not copy their
+record-specific values) are:
+{json.dumps(format_examples, ensure_ascii=False)}
+When examples are available, follow their formatting for dates, units, category
+labels, capitalization, and other repeated field values where the document's
+meaning matches. Keep the schema's canonical field names. Do not copy identifiers
+or generated metadata from examples, and do not force an example value when the
+document contains different information.
 """
 
     try:
@@ -232,7 +297,7 @@ def process_document_upload(
 
     try:
         records, confidence, ambiguous_fields = extract_document_records(
-            content, filename, hint or "waste"
+            content, filename, hint or "waste", restaurant_id
         )
     except (DocumentExtractionUnavailable, DocumentExtractionError):
         db.add_document(collection_path, doc_id, {

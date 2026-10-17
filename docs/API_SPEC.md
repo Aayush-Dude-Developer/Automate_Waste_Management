@@ -59,18 +59,14 @@ All endpoints require the HTTP header `X-Restaurant-Id: <restaurant_id>` (defaul
   - Body: `{"document_id": str, "confirmed_records": List[dict], "target_entity": str}`.
   - Validates and bulk-commits approved records into target collection (`waste_records`, `staff_meal_records`, or `inventory_items`).
 
-## Donation centre discovery
-- `POST /api/donations/match?use_ai=true`
-  - Include the restaurant's `location_area`, `city`, and `country` in the request;
-    `state` and `pincode` are optional.
-  - AI discovery uses Google Search grounding to check Google Maps listings and
-    centre websites. It returns only supported details, links to the Maps listing,
-    timings, phone, minimum accepted weight, pickup availability, and vegetarian/
-    non-vegetarian acceptance when found. Unknown values remain null.
-  - Results are ranked by approximate straight-line distance when Google Maps
-    coordinates are available; centres without verifiable coordinates appear last.
-    AI results are unverified and discovery failures do not silently fall back to
-    demo centres.
+## Donation centre search
+- `POST /api/donations/search`
+  - Body: `{"query": "food donation centres near Kharadi, Pune"}`.
+  - Always uses Gemini without Google Search grounding to suggest up to 10
+    centres from its existing knowledge. It is instructed to omit uncertain
+    centres and not to invent addresses, contacts, hours, URLs, or current status.
+  - Requires `GEMINI_API_KEY`. Results are not live-verified; Google Maps
+    grounding is planned for a future update.
 
 ---
 
@@ -181,18 +177,14 @@ All endpoints require the HTTP header `X-Restaurant-Id: <restaurant_id>` (defaul
 
 ---
 
-## 8. Donation Centre Discovery & Multi-Criteria Matching
-- `GET /api/donations/centres`
-  - Query params: `verified_only: bool`, `accepts_cooked: bool`.
-  - Returns directory of verified donation centres with pickup terms, costs, and contact info.
-- `POST /api/donations/match`
-  - Body: `{"food_name": str, "food_type": str, "quantity_kg": float, "temperature_class": str, "ready_by_time": str}`.
-  - Deterministically evaluates candidate food banks against:
-    1. Food acceptance compatibility
-    2. Minimum quantity threshold
-    3. Maximum radius & pickup availability
-    4. Safe transit time window
-  - Returns ranked list of compatible centres with transparent match rationale and unverified warnings.
+## 8. Donation Centre Search
+- `POST /api/donations/search`
+  - Body: `{"query": "food donation centres near Kharadi, Pune"}`.
+  - Always uses Gemini without Google Search grounding to suggest up to 10
+    centres from its existing knowledge. It is instructed to omit uncertain
+    centres and not to invent addresses, contacts, hours, URLs, or current status.
+  - Requires `GEMINI_API_KEY`. Results are not live-verified; Google Maps
+    grounding is planned for a future update.
 - `GET /api/donations/handovers`
   - Optional `limit` (1-500) returns the most recent handovers first; omitted means all
     records. The impact screen previews 100 and loads all records only for CSV export.

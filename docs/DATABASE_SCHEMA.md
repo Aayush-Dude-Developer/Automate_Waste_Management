@@ -120,15 +120,15 @@ These documents are available through `/api/purchases`, `/api/recipes`, `/api/sa
 and `/api/theoretical-consumption/{YYYY-MM}`. No live Firestore data is changed by adding
 these schemas and endpoints.
 
-### Synthetic purchase recommendation demo dataset
+### Purchase recommendation data generation
 
-`backend/seed_purchase_demo.py` creates a deterministic, isolated example for
-`taiken_kharadi`: six `demo_` ingredients with explicit supplier lead times/MOQs/pack
+`backend/seed_purchase_demo.py` creates a deterministic, isolated generated dataset for
+`taiken_kharadi`: six ingredients with explicit supplier lead times/MOQs/pack
 sizes and yields, verified dated batch invoices, three recipes, and 56 days of net
-weekday-varied sales. Records are marked `synthetic_demo=true`; do not use them for
-operational purchasing, accounting, or food safety decisions. The demo includes one
+weekday-varied sales. Records carry a system-generated provenance marker; do not use them for
+operational purchasing, accounting, or food safety decisions. The generated dataset includes one
 expired tomato lot to demonstrate the exclusion and write-off warning. It only writes
-the `demo_` record IDs and a seed metadata marker; it does not overwrite existing
+the generated record IDs and a seed metadata marker; it does not overwrite existing
 operational IDs. Re-running on the same history-through date performs no writes.
 
 From the repository root, preview the number of documents without writing:
@@ -144,9 +144,20 @@ To write the synthetic records, set `DATABASE_BACKEND=firestore` and
 .\backend\.venv_312\Scripts\python.exe -m backend.seed_purchase_demo --restaurant-id taiken_kharadi --apply
 ```
 
-The demo batch balances sum to each demo inventory item's recorded total on hand;
+The batch balances sum to each inventory item's recorded total on hand;
 the recommendations count only non-expired batch balances plus separately identified
 untracked stock. This additive Firestore document model requires no SQL migration.
+
+To normalize legacy generated labels and IDs in stored table records, first preview the
+configured restaurant and shared donation-centres collection with:
+
+```powershell
+.\backend\.venv_312\Scripts\python.exe -m backend.migrations.rename_demo_metadata
+```
+
+Apply the changes by adding `--apply`. The migration updates references along with
+document IDs and aborts before writing if a rename would collide with a different
+record.
 
 For existing inventory documents, preview the additive alias/default migration from the
 repository root with:

@@ -4,6 +4,7 @@
   body {
     background-color: var(--color-slate-50);
     color: var(--color-slate-900);
+    transition: background-color 180ms ease, color 180ms ease;
   }
 }
 
@@ -12,4 +13,129 @@
   --color-restaurant-secondary: #d97706;
   --color-restaurant-dark: #1e293b;
   --color-restaurant-light: #f8fafc;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-slate-50: #0b1120;
+  --color-slate-100: #111a2b;
+  --color-slate-200: #253249;
+  --color-slate-300: #34445e;
+  --color-slate-400: #71829c;
+  --color-slate-500: #93a4ba;
+  --color-slate-600: #b7c4d6;
+  --color-slate-700: #d0dae8;
+  --color-slate-800: #e2eaf4;
+  --color-slate-900: #f1f5fb;
+  --color-slate-950: #f8fafc;
+  --color-restaurant-primary: #34d399;
+  --color-restaurant-secondary: #fbbf24;
+  --color-restaurant-dark: #e2eaf4;
+  --color-restaurant-light: #111a2b;
+  --surface-raised: #111a2b;
+  --border-default: #253249;
+  --text-primary: #e2eaf4;
+  --chart-grid: #34445e;
+}
+
+.dark .bg-white {
+  background-color: var(--surface-raised);
+}
+
+.dark [class~="bg-slate-900"] {
+  background-color: #047857;
+}
+
+.dark [class~="hover:bg-slate-700"]:hover {
+  background-color: #065f46;
+}
+
+.dark [class~="bg-emerald-50"],
+.dark [class~="bg-emerald-100"] {
+  background-color: rgb(16 185 129 / 15%);
+}
+
+.dark [class~="bg-rose-50"],
+.dark [class~="bg-rose-100"] {
+  background-color: rgb(244 63 94 / 15%);
+}
+
+.dark [class~="bg-indigo-50"],
+.dark [class~="bg-indigo-100"] {
+  background-color: rgb(99 102 241 / 18%);
+}
+
+.dark [class~="bg-amber-50"],
+.dark [class~="bg-amber-100"] {
+  background-color: rgb(245 158 11 / 16%);
+}
+
+.dark [class~="bg-yellow-50"],
+.dark [class~="bg-yellow-100"] {
+  background-color: rgb(234 179 8 / 15%);
+}
+
+.dark [class~="bg-red-50"],
+.dark [class~="bg-red-100"] {
+  background-color: rgb(239 68 68 / 15%);
+}
+
+.dark [class~="bg-blue-50"],
+.dark [class~="bg-blue-100"] {
+  background-color: rgb(59 130 246 / 15%);
+}
+
+.dark [class~="bg-orange-50"],
+.dark [class~="bg-orange-100"] {
+  background-color: rgb(249 115 22 / 15%);
+}
+
+.dark [class~="text-emerald-600"],
+.dark [class~="text-emerald-700"],
+.dark [class~="text-emerald-800"] {
+  color: #6ee7b7;
+}
+
+.dark [class~="text-rose-600"],
+.dark [class~="text-rose-700"],
+.dark [class~="text-rose-800"] {
+  color: #fda4af;
+}
+
+.dark [class~="text-indigo-600"],
+.dark [class~="text-indigo-700"],
+.dark [class~="text-indigo-800"] {
+  color: #c4b5fd;
+}
+
+.dark [class~="text-amber-600"],
+.dark [class~="text-amber-700"],
+.dark [class~="text-amber-800"] {
+  color: #fcd34d;
+}
+
+.dark [class~="text-red-600"],
+.dark [class~="text-red-700"],
+.dark [class~="text-red-800"] {
+  color: #fca5a5;
+}
+
+.dark [class~="text-blue-600"],
+.dark [class~="text-blue-700"],
+.dark [class~="text-blue-800"] {
+  color: #93c5fd;
+}
+
+.dark [class~="text-orange-600"],
+.dark [class~="text-orange-700"],
+.dark [class~="text-orange-800"] {
+  color: #fdba74;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

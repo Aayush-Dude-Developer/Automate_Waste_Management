@@ -23,6 +23,7 @@ interface AmendmentResponse {
 }
 
 const fieldClass = 'rounded-md border border-slate-300 px-3 py-2 text-sm';
+const DOCUMENT_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const jsonArrayFields = new Set(['items', 'yield_stages']);
 
 function cellText(value: unknown): string {
@@ -84,7 +85,11 @@ export default function DocumentsView() {
     body.append('file', file);
     body.append('document_type_hint', hint);
     try {
-      const result = await apiRequest<ExtractionPreview>('/api/documents/upload', { method: 'POST', body });
+      const result = await apiRequest<ExtractionPreview>('/api/documents/upload', {
+        method: 'POST',
+        body,
+        signal: AbortSignal.timeout(DOCUMENT_REQUEST_TIMEOUT_MS),
+      });
       setPreview(result);
       setRecords(result.extracted_records);
     } catch (cause) {
@@ -112,6 +117,7 @@ export default function DocumentsView() {
           confirmed_records: confirmedRecords,
           target_entity: target,
         }),
+        signal: AbortSignal.timeout(DOCUMENT_REQUEST_TIMEOUT_MS),
       });
       setNotice(`${result.imported_records} record(s) imported.`);
       setPreview(null);
@@ -137,6 +143,7 @@ export default function DocumentsView() {
           current_records: prepareRecords(records),
           amendment: amendment.trim(),
         }),
+        signal: AbortSignal.timeout(DOCUMENT_REQUEST_TIMEOUT_MS),
       });
       setRecords(result.updated_records);
       setNotice(`${result.message} Review the updated table before importing.`);
@@ -175,7 +182,7 @@ export default function DocumentsView() {
   const columns = columnsFor(records, preview?.available_fields ?? []);
 
   return <div className="p-8">
-    <div className="mb-6"><h1 className="text-2xl font-bold text-slate-800">Document Ingestion</h1><p className="mt-1 text-sm text-slate-500">Upload a document, review and edit mapped records, then explicitly confirm imports.</p></div>
+    <div className="mb-6"><h1 className="text-2xl font-bold text-slate-800">Document Ingestion</h1><p className="mt-1 text-sm text-slate-500">Upload a document, review and edit mapped records, then explicitly confirm imports. Extraction uses recent entries as formatting examples when available.</p></div>
     {error && <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
     {notice && <div role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -42,14 +42,6 @@ def _date(value: Any) -> date | None:
         return None
 
 
-def _is_synthetic_record(record: dict[str, Any]) -> bool:
-    return (
-        record.get("synthetic_demo") is True
-        or record.get("synthetic_sample_data") is True
-        or str(record.get("sales_source", "")).lower() == "synthetic_demo"
-    )
-
-
 def _item_stock(item: dict[str, Any]) -> float:
     if item.get("total_current_quantity") is not None:
         return max(0.0, float(item["total_current_quantity"]))
@@ -156,10 +148,6 @@ def get_purchase_recommendations(
             ("sale_date", "<=", history_end.isoformat()),
         ],
     )
-    synthetic_inputs_detected = any(
-        _is_synthetic_record(record)
-        for record in [*inventory, *recipe_documents, *recipe_ingredients, *sales]
-    )
     data_warnings = []
     if not inventory:
         data_warnings.append("No inventory items are configured.")
@@ -169,13 +157,6 @@ def get_purchase_recommendations(
         data_warnings.append("No recipe ingredient rows are configured.")
     if not sales:
         data_warnings.append("No sales records were found in the 56-day history window; the page will not invent demand.")
-    if synthetic_inputs_detected:
-        data_warnings.append(
-            "Synthetic demo inventory, recipe, or sales records are included in this forecast. "
-            "Treat recommendations as illustrative and replace sample inputs with verified "
-            "operational data before placing orders."
-        )
-
     projection_days = 90
     forecast_dates = [
         forecast_start + timedelta(days=offset)
@@ -538,11 +519,6 @@ def get_purchase_recommendations(
             *expiry_warnings,
             *warnings_by_ingredient.get(ingredient_id, []),
         ]
-        if synthetic_inputs_detected:
-            warnings.append(
-                "This forecast includes synthetic demo inputs; do not use its quantity as a "
-                "live purchasing instruction until verified operational data is loaded."
-            )
         if sales_day_count < 14:
             warnings.append(f"Only {sales_day_count} distinct sales days were found in the 56-day history window.")
         if not requirements.get(ingredient_id):
@@ -578,8 +554,7 @@ def get_purchase_recommendations(
         if expired_or_near_expiry:
             warnings.append("Batch expiry and remaining quantities are displayed from verified purchase lots.")
         if (
-            synthetic_inputs_detected
-            or sales_day_count < 14
+            sales_day_count < 14
             or not requirements.get(ingredient_id)
             or warnings_by_ingredient.get(ingredient_id)
             or expiry_cap_unavailable
@@ -684,7 +659,6 @@ def get_purchase_recommendations(
             f"be met. Recommended "
             f"order date is {order_date_reason} This recommendation covers the next replenishment only; "
             f"future orders are recalculated from updated stock and expiry records. Forecast quality: {reliability}."
-            f"{' Inputs include synthetic demo data; treat this as illustrative only.' if synthetic_inputs_detected else ''}"
         )
         recommendations.append(PurchaseRecommendation(
             recommendation_id=_recommendation_id(forecast_start, forecast_period_days, ingredient_id),

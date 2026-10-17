@@ -298,7 +298,7 @@ def test_lot_depletion_uses_earliest_unexpired_batch_and_rejects_shortage(monkey
         stock_service.prepare_lot_depletion("demo", item, 9, as_of)
 
 
-def test_synthetic_demo_dataset_populates_reliable_recommendation_inputs(monkeypatch):
+def test_generated_dataset_populates_reliable_recommendation_inputs(monkeypatch):
     as_of = date(2026, 10, 11)
     seeded = {}
     for path, _, document in build_documents(as_of):
@@ -312,16 +312,38 @@ def test_synthetic_demo_dataset_populates_reliable_recommendation_inputs(monkeyp
     assert len(seeded["restaurants/taiken_kharadi/recipes"]) == 3
     assert dashboard.recommendations
     assert not any("No sales records" in warning for warning in dashboard.data_warnings)
-    assert any("Synthetic demo" in warning for warning in dashboard.data_warnings)
+    assert not dashboard.data_warnings
+    assert {row.priority for row in dashboard.recommendations} >= {"critical", "high", "medium"}
+    assert {row.ingredient_name for row in dashboard.recommendations} >= {
+        "Chicken Thigh", "Tomato", "Baby Pak Choi", "Wheat Noodles", "Light Soy Sauce",
+    }
+    assert not any(row.ingredient_name == "Jasmine Rice (Bulk)" for row in dashboard.recommendations)
+    assert all(row.forecast_daily_consumption > 0 for row in dashboard.recommendations)
+    source_inventory = {
+        row["id"]: row for row in seeded["restaurants/taiken_kharadi/inventory_items"]
+    }
     for recommendation in dashboard.recommendations:
-        assert recommendation.reliability_warnings
-        assert any("synthetic demo inputs" in warning for warning in recommendation.reliability_warnings)
-        assert "Forecast quality: low" in recommendation.explanation
+        assert not any("generated" in warning.casefold() for warning in recommendation.reliability_warnings)
+        assert "Forecast quality: baseline" in recommendation.explanation
         assert recommendation.supplier_lead_time_days is not None
         assert recommendation.supplier_id
+        source = source_inventory[recommendation.ingredient_id]
+        if not any("may not meet supplier constraints" in warning for warning in recommendation.reliability_warnings):
+            assert recommendation.recommended_purchase_quantity >= source["minimum_order_quantity"]
+            assert recommendation.recommended_purchase_quantity / source["pack_size"] == pytest.approx(
+                round(recommendation.recommended_purchase_quantity / source["pack_size"])
+            )
         assert not any("Minimum order quantity is not configured" in warning for warning in recommendation.reliability_warnings)
         assert not any("Pack size is not configured" in warning for warning in recommendation.reliability_warnings)
         assert not any("Lot-level expiry tracking is not enabled" in warning for warning in recommendation.reliability_warnings)
+    rice = next(item for item in seeded["restaurants/taiken_kharadi/inventory_items"] if item["item_name"] == "Jasmine Rice (Bulk)")
+    assert rice["total_current_quantity"] == 200
+    assert rice["reorder_threshold"] == 70
+    assert all(
+        line["remaining_usable_quantity"] > 0
+        for line in seeded["restaurants/taiken_kharadi/purchase_lines"]
+    )
+    assert any(row.expiry_batches for row in dashboard.recommendations)
 
 
 def test_missing_sales_and_recipe_data_is_warned_without_fabricated_demand(monkeypatch):

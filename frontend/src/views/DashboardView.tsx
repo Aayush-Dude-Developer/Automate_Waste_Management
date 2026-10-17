@@ -43,7 +43,7 @@ export default function DashboardView() {
         <div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%">
           <AreaChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs><linearGradient id="colorWaste" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="95%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient></defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="day" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} /><Tooltip formatter={(value) => [`${value ?? 0} kg`, 'Waste logged']} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid, #e2e8f0)" /><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-slate-500)' }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-slate-500)' }} /><Tooltip contentStyle={{ backgroundColor: 'var(--surface-raised, #ffffff)', borderColor: 'var(--border-default, #e2e8f0)', color: 'var(--text-primary, #1e293b)' }} formatter={(value) => [`${value ?? 0} kg`, 'Waste logged']} />
             <Area type="monotone" dataKey="waste" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorWaste)" />
           </AreaChart>
         </ResponsiveContainer></div>}

@@ -142,9 +142,14 @@ def test_document_extraction_sends_uploaded_image_to_gemini(monkeypatch):
             )()
 
     model = FakeModel()
+    client_options = {}
     monkeypatch.setattr(document_service.settings, "GEMINI_API_KEY", "configured-key")
     monkeypatch.setattr(
-        document_service.genai, "Client", lambda **_kwargs: type("Client", (), {"models": model})()
+        document_service.genai,
+        "Client",
+        lambda **kwargs: (
+            client_options.update(kwargs) or type("Client", (), {"models": model})()
+        ),
     )
 
     extracted, confidence, ambiguous_fields = document_service.extract_document_records(
@@ -154,11 +159,50 @@ def test_document_extraction_sends_uploaded_image_to_gemini(monkeypatch):
     assert extracted == records
     assert confidence == 0.9
     assert ambiguous_fields == []
+    assert client_options["http_options"].timeout == 300_000
     image_part = model.request["contents"][1]
     assert "closest matching canonical field names" in model.request["contents"][0]
     assert "Source documents can use different names" in model.request["contents"][0]
     assert image_part.inline_data.mime_type == "image/jpeg"
     assert image_part.inline_data.data == b"image data"
+
+
+def test_document_extraction_uses_restaurant_records_as_format_examples(monkeypatch):
+    database = FakeDatabase({
+        "restaurants/demo/waste_records": [
+            {
+                "id": "waste-123",
+                "date": "2026-10-14",
+                "item_name": "Tomatoes",
+                "quantity": 2,
+                "unit": "kg",
+                "reason": "Overripe",
+                "checked_by": "Manager",
+                "financial_loss_inr": 84,
+            },
+        ],
+    })
+    captured = {}
+    monkeypatch.setattr(document_service, "db", database)
+
+    def fake_generate(prompt, _contents):
+        captured["prompt"] = prompt
+        return {
+            "extracted_records": [{"date": "2026-10-15", "item_name": "Onions"}],
+            "confidence_score": 0.9,
+            "ambiguous_fields": [],
+        }
+
+    monkeypatch.setattr(document_service, "_generate_json", fake_generate)
+
+    document_service.extract_document_records(
+        b"text data", "waste.txt", "waste", restaurant_id="demo"
+    )
+
+    assert '"unit": "kg"' in captured["prompt"]
+    assert "format examples only; do not copy their" in captured["prompt"]
+    assert "waste-123" not in captured["prompt"]
+    assert "financial_loss_inr" not in captured["prompt"]
 
 
 def test_document_extraction_reports_gemini_503_as_temporary_unavailability(monkeypatch):

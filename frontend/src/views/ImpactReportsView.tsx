@@ -66,6 +66,6 @@ export default function ImpactReportsView() {
           <tbody className="divide-y divide-slate-200">{rows.slice(1).length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-500">No waste or donation records are available yet.</td></tr> : rows.slice(1).map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex} className="px-4 py-3 text-slate-600">{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>}
-    <p className="mt-3 text-xs text-slate-500">Exports include only records returned by the backend; no estimates or sample metrics are added.</p>
+    <p className="mt-3 text-xs text-slate-500">Exports include only records returned by the backend; no estimates are added.</p>
   </div>;
 }

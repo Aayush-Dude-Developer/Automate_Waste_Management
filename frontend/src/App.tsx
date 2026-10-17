@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import DashboardView from './views/DashboardView';
 import InventoryView from './views/InventoryView';
@@ -11,7 +11,6 @@ import DocumentsView from './views/DocumentsView';
 import ImpactReportsView from './views/ImpactReportsView';
 import SettingsView from './views/SettingsView';
 import RecipesView from './views/RecipesView';
-import MonthlyStockView from './views/MonthlyStockView';
 
 function App() {
   return (
@@ -23,9 +22,10 @@ function App() {
           <Route path="/sales-purchases" element={<PurchaseRecommendationsView />} />
           <Route path="/purchases" element={<PurchaseInvoicesView />} />
           <Route path="/recipes" element={<RecipesView />} />
-          <Route path="/stock-balances" element={<MonthlyStockView />} />
           <Route path="/buffet-planning" element={<BuffetPlanningView />} />
-          <Route path="/surplus-waste" element={<SurplusWasteView />} />
+          <Route path="/staff-consumption" element={<SurplusWasteView mode="staff" />} />
+          <Route path="/waste" element={<SurplusWasteView mode="waste" />} />
+          <Route path="/surplus-waste" element={<Navigate to="/waste" replace />} />
           <Route path="/donations" element={<DonationCentresView />} />
           <Route path="/documents" element={<DocumentsView />} />
           <Route path="/impact" element={<ImpactReportsView />} />

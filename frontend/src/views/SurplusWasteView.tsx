@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { AlertTriangle, CheckCircle, Search, Sparkles, Trash2 } from 'lucide-react';
-import { apiRequest, type Investigation, type InventoryItem, type Recipe, type StaffConsumption, type WasteRecord, type WasteRecordV2 } from '../lib/api';
+import { Search, Sparkles, Trash2 } from 'lucide-react';
+import { apiRequest, type Investigation, type InventoryItem, type Recipe, type StaffConsumption, type StaffMealRecord, type WasteRecord, type WasteRecordV2 } from '../lib/api';
 
 const fieldClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 const today = new Date().toISOString().slice(0, 10);
 
-export default function SurplusWasteView() {
+interface StaffConsumptionRow {
+  id: string;
+  date: string;
+  source: string;
+  quantity: string;
+  staffCount: number | null;
+  recordedBy: string;
+}
+
+export default function SurplusWasteView({ mode }: { mode: 'staff' | 'waste' }) {
   const [wasteLogs, setWasteLogs] = useState<WasteRecord[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [staffRecords, setStaffRecords] = useState<StaffConsumption[]>([]);
+  const [staffRecords, setStaffRecords] = useState<StaffConsumptionRow[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showStaffForm, setShowStaffForm] = useState(false);
   const [showAllRecords, setShowAllRecords] = useState(false);
@@ -31,11 +40,20 @@ export default function SurplusWasteView() {
 
   const refresh = useCallback(async () => {
     try {
-      const [legacyLogs, inventory, records, staff, recipeRecords] = await Promise.all([
-        apiRequest<WasteRecord[]>(`/api/waste${showAllRecords ? '' : '?limit=100'}`),
+      const [legacyLogs, inventory, records, staff, staffMeals, recipeRecords] = await Promise.all([
+        mode === 'waste'
+          ? apiRequest<WasteRecord[]>(`/api/waste${showAllRecords ? '' : '?limit=100'}`)
+          : Promise.resolve<WasteRecord[]>([]),
         apiRequest<InventoryItem[]>('/api/inventory/items'),
-        apiRequest<WasteRecordV2[]>(`/api/stock/waste-records${showAllRecords ? '' : '?limit=100'}`),
-        apiRequest<StaffConsumption[]>(`/api/staff-consumptions${showAllRecords ? '' : '?limit=100'}`),
+        mode === 'waste'
+          ? apiRequest<WasteRecordV2[]>(`/api/stock/waste-records${showAllRecords ? '' : '?limit=100'}`)
+          : Promise.resolve<WasteRecordV2[]>([]),
+        mode === 'staff'
+          ? apiRequest<StaffConsumption[]>(`/api/staff-consumptions${showAllRecords ? '' : '?limit=100'}`)
+          : Promise.resolve<StaffConsumption[]>([]),
+        mode === 'staff'
+          ? apiRequest<StaffMealRecord[]>(`/api/staff-meals${showAllRecords ? '' : '?limit=100'}`)
+          : Promise.resolve<StaffMealRecord[]>([]),
         apiRequest<Recipe[]>('/api/recipes'),
       ]);
       const mappedRecords: WasteRecord[] = records.map((record) => ({
@@ -45,21 +63,45 @@ export default function SurplusWasteView() {
         inventory_item_id: record.ingredient_id,
         quantity: record.quantity,
         unit: record.unit,
-        reason: `${record.waste_reason} · ${record.stage} · ${record.waste_type}`,
+        reason: record.waste_reason,
         checked_by: record.recorded_by,
         financial_loss_inr: record.estimated_cost ?? 0,
       }));
       setWasteLogs([...mappedRecords, ...legacyLogs]);
       setItems(inventory);
-      setStaffRecords(staff);
+      const consumptionRows: StaffConsumptionRow[] = staff.map((record) => ({
+        id: record.consumption_id,
+        date: record.consumption_date,
+        source: record.recipe_id
+          ? recipeRecords.find((recipe) => recipe.recipe_id === record.recipe_id)?.recipe_name ?? record.recipe_id
+          : inventory.find((item) => item.id === record.ingredient_id)?.item_name ?? record.ingredient_id ?? 'Ingredient',
+        quantity: record.portions
+          ? `${record.portions} portions`
+          : `${record.quantity ?? 0} ${record.unit ?? ''}`.trim(),
+        staffCount: record.staff_count ?? null,
+        recordedBy: record.recorded_by,
+      }));
+      const staffMealRows: StaffConsumptionRow[] = staffMeals.map((record) => ({
+        id: record.id,
+        date: record.date,
+        source: `Staff meal · ${record.shift}`,
+        quantity: record.items
+          .map((item) => `${item.ingredient_name}: ${item.quantity} ${item.unit}`)
+          .join(', '),
+        staffCount: record.staff_on_shift_count,
+        recordedBy: record.prepared_by,
+      }));
+      const sortedStaffRecords = [...consumptionRows, ...staffMealRows]
+        .sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id));
+      setStaffRecords(showAllRecords ? sortedStaffRecords : sortedStaffRecords.slice(0, 100));
       setRecipes(recipeRecords);
       setError('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load waste records.');
+      setError(cause instanceof Error ? cause.message : 'Could not load records.');
     } finally {
       setLoading(false);
     }
-  }, [showAllRecords]);
+  }, [mode, showAllRecords]);
 
   useEffect(() => { void Promise.resolve().then(refresh); }, [refresh]);
 
@@ -128,15 +170,20 @@ export default function SurplusWasteView() {
     }
   };
 
-  const investigate = async (item: InventoryItem, serviceDate: string) => {
-    setInvestigatingId(item.id);
+  const investigate = async (
+    itemId: string,
+    itemName: string,
+    serviceDate: string,
+    rowId: string,
+  ) => {
+    setInvestigatingId(rowId);
     setInvestigationResult(null);
     setError('');
     setNotice('');
     try {
       setInvestigationResult(await apiRequest<Investigation>('/api/ai/investigate-surplus', {
         method: 'POST',
-        body: JSON.stringify({ target_item_id: item.id, target_item_name: item.item_name, service_date: serviceDate }),
+        body: JSON.stringify({ target_item_id: itemId, target_item_name: itemName, service_date: serviceDate }),
       }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not analyze surplus risk.');
@@ -145,25 +192,11 @@ export default function SurplusWasteView() {
     }
   };
 
-  const approve = async (interventionId: string) => {
-    if (!investigationResult) return;
-    try {
-      await apiRequest(`/api/ai/investigations/${encodeURIComponent(investigationResult.id)}/approve-action`, {
-        method: 'POST',
-        body: JSON.stringify({ selected_intervention_id: interventionId, notes: null }),
-      });
-      setNotice('Intervention approval recorded. The backend records approval; it does not execute the proposed action.');
-      setInvestigationResult(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not record approval.');
-    }
-  };
-
   return <div className="p-8">
-    <div className="mb-6 flex items-center justify-between"><h1 className="text-2xl font-bold text-slate-800">Surplus & Waste Records</h1><div className="flex gap-2"><button onClick={() => setShowAllRecords((value) => !value)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">{showAllRecords ? 'Show latest 100' : 'Load full history'}</button><button onClick={() => setShowForm((value) => !value)} className="flex items-center rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"><Trash2 className="mr-2 h-4 w-4" />{showForm ? 'Close' : 'Log Waste'}</button></div></div>
+    <div className="mb-6 flex items-center justify-between"><h1 className="text-2xl font-bold text-slate-800">{mode === 'staff' ? 'Staff Consumption' : 'Waste'}</h1><div className="flex gap-2"><button onClick={() => setShowAllRecords((value) => !value)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">{showAllRecords ? 'Show latest 100' : 'Load full history'}</button>{mode === 'waste' && <button onClick={() => setShowForm((value) => !value)} className="flex items-center rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"><Trash2 className="mr-2 h-4 w-4" />{showForm ? 'Close' : 'Log Waste'}</button>}</div></div>
     {error && <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
     {notice && <div role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
-    {showForm && <form onSubmit={createWaste} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-5">
+    {mode === 'waste' && showForm && <form onSubmit={createWaste} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-5">
       <select required value={form.inventory_item_id} onChange={(e) => setForm({ ...form, inventory_item_id: e.target.value })} className={fieldClass}><option value="">Select inventory item</option>{items.map((item) => <option key={item.id} value={item.id}>{item.item_name} ({item.base_unit})</option>)}</select>
       <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={fieldClass} />
       <input required type="number" min="0.001" step="any" placeholder={`Quantity${selectedItem ? ` (${selectedItem.base_unit})` : ''}`} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className={fieldClass} />
@@ -176,7 +209,7 @@ export default function SurplusWasteView() {
       <button disabled={saving || !items.length} className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2 lg:col-span-5">{saving ? 'Saving…' : form.waste_type === 'raw_ingredient' ? 'Save raw waste and deduct stock' : 'Save prepared-food surplus'}</button>
     </form>}
 
-    <section className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+    {mode === 'staff' && <section className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b p-4"><div><h2 className="text-lg font-semibold text-slate-800">Staff Consumption</h2><p className="text-xs text-slate-500">{showAllRecords ? 'Showing all history.' : 'Showing the latest 100.'} Record ingredients directly or calculate raw usage from a recipe and portions.</p></div><button onClick={() => setShowStaffForm((visible) => !visible)} className="rounded-md bg-restaurant-primary px-3 py-2 text-sm font-medium text-white">{showStaffForm ? 'Close' : 'Log staff consumption'}</button></div>
       {showStaffForm && <form onSubmit={createStaffConsumption} className="grid grid-cols-1 gap-3 border-b p-5 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-medium text-slate-600">Consumption date<input required type="date" value={staffForm.consumption_date} onChange={(e) => setStaffForm({ ...staffForm, consumption_date: e.target.value })} className={`${fieldClass} mt-1`} /></label>
@@ -194,35 +227,34 @@ export default function SurplusWasteView() {
         <label className="text-xs font-medium text-slate-600">Source transaction ID (optional)<input value={staffForm.source_reference} onChange={(e) => setStaffForm({ ...staffForm, source_reference: e.target.value })} className={`${fieldClass} mt-1`} /></label>
         <button disabled={saving || (staffForm.mode === 'recipe' && !recipes.length)} className="self-end rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save staff consumption & deduct stock'}</button>
       </form>}
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm text-slate-600"><thead className="border-b bg-slate-50 text-slate-700"><tr><th className="px-5 py-3">Date</th><th className="px-5 py-3">Consumption source</th><th className="px-5 py-3">Quantity / portions</th><th className="px-5 py-3">Staff count</th><th className="px-5 py-3">Recorded by</th></tr></thead><tbody className="divide-y">{staffRecords.length ? staffRecords.map((record) => <tr key={record.consumption_id}><td className="px-5 py-3">{record.consumption_date}</td><td className="px-5 py-3">{record.recipe_id ? recipes.find((recipe) => recipe.recipe_id === record.recipe_id)?.recipe_name ?? record.recipe_id : items.find((item) => item.id === record.ingredient_id)?.item_name ?? record.ingredient_id}</td><td className="px-5 py-3">{record.portions ? `${record.portions} portions` : `${record.quantity ?? 0} ${record.unit ?? ''}`}</td><td className="px-5 py-3">{record.staff_count ?? '—'}</td><td className="px-5 py-3">{record.recorded_by}</td></tr>) : <tr><td colSpan={5} className="p-6 text-center">No new staff consumption records yet.</td></tr>}</tbody></table></div>
-    </section>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm text-slate-600"><thead className="border-b bg-slate-50 text-slate-700"><tr><th className="px-5 py-3">Date</th><th className="px-5 py-3">Consumption source</th><th className="px-5 py-3">Quantity / portions</th><th className="px-5 py-3">Staff count</th><th className="px-5 py-3">Recorded by</th></tr></thead><tbody className="divide-y">{staffRecords.length ? staffRecords.map((record) => <tr key={record.id}><td className="px-5 py-3">{record.date}</td><td className="px-5 py-3">{record.source}</td><td className="px-5 py-3">{record.quantity}</td><td className="px-5 py-3">{record.staffCount ?? '—'}</td><td className="px-5 py-3">{record.recordedBy}</td></tr>) : <tr><td colSpan={5} className="p-6 text-center">No staff consumption records found.</td></tr>}</tbody></table></div>
+    </section>}
 
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    {mode === 'waste' && <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <section className="h-fit overflow-hidden rounded-lg border border-slate-200 bg-white lg:col-span-2">
         <div className="flex items-center justify-between border-b p-4"><div><h2 className="text-lg font-semibold text-slate-800">Recent Waste Logs</h2><p className="text-xs text-slate-500">{showAllRecords ? 'Showing all history.' : 'Showing the latest 100 records.'}</p></div><button onClick={() => void refresh()} className="text-sm font-medium text-indigo-700">Refresh</button></div>
         <div className="overflow-x-auto"><table className="w-full text-left text-sm text-slate-600">
-          <thead className="border-b bg-slate-50 text-slate-700"><tr><th className="px-5 py-3">Date</th><th className="px-5 py-3">Item</th><th className="px-5 py-3">Qty</th><th className="px-5 py-3">Reason / Loss</th><th className="px-5 py-3 text-right">Analyze</th></tr></thead>
+          <thead className="border-b bg-slate-50 text-slate-700"><tr><th className="px-5 py-3">Date</th><th className="px-5 py-3">Item</th><th className="px-5 py-3">Qty</th><th className="px-5 py-3">Reason</th><th className="px-5 py-3 text-right">Analyze</th></tr></thead>
           <tbody className="divide-y divide-slate-200">{loading ? <tr><td colSpan={5} className="p-8 text-center">Loading waste records…</td></tr>
             : wasteLogs.length === 0 ? <tr><td colSpan={5} className="p-8 text-center">No waste records have been logged.</td></tr>
               : wasteLogs.map((log) => {
                 const item = items.find((entry) => entry.id === log.inventory_item_id);
-                return <tr key={log.id}><td className="whitespace-nowrap px-5 py-4">{log.date}</td><td className="px-5 py-4 font-medium text-slate-900">{log.item_name}</td><td className="px-5 py-4">{log.quantity} {log.unit}</td><td className="px-5 py-4">{log.reason}<div className="text-xs text-slate-500">₹{log.financial_loss_inr.toLocaleString()} loss</div></td><td className="px-5 py-4 text-right"><button disabled={!item || !!investigatingId} onClick={() => item && void investigate(item, log.date)} className="inline-flex items-center text-xs font-medium text-indigo-700 disabled:text-slate-400"><Sparkles className="mr-1 h-3 w-3" />{investigatingId === item?.id ? 'Analyzing…' : 'Analyze Risk'}</button></td></tr>;
+                const targetItemId = item?.id ?? log.inventory_item_id ?? '';
+                return <tr key={log.id}><td className="whitespace-nowrap px-5 py-4">{log.date}</td><td className="px-5 py-4 font-medium text-slate-900">{log.item_name}</td><td className="px-5 py-4">{log.quantity} {log.unit}</td><td className="px-5 py-4">{log.reason}</td><td className="px-5 py-4 text-right"><button disabled={!!investigatingId} onClick={() => void investigate(targetItemId, log.item_name, log.date, log.id)} className="inline-flex items-center text-xs font-medium text-indigo-700 disabled:text-slate-400"><Sparkles className="mr-1 h-3 w-3" />{investigatingId === log.id ? 'Analyzing…' : 'Analyze Risk'}</button></td></tr>;
               })}</tbody>
         </table></div>
       </section>
 
       <section className="flex h-fit flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center border-b bg-indigo-50 p-4"><Sparkles className="mr-2 h-5 w-5 text-indigo-600" /><h2 className="text-lg font-semibold text-indigo-900">Investigation</h2></div>
-        {!investigationResult ? <div role={investigatingId ? 'status' : undefined} className="p-6 text-center text-sm text-slate-500">{investigatingId ? <><Sparkles className="mx-auto mb-3 h-6 w-6 animate-pulse text-indigo-600" />Analyzing risk. If Gemini is unavailable, a deterministic fallback will be used.</> : <><Search className="mx-auto mb-3 h-6 w-6" />Analyze a waste entry linked to an inventory item to get a backend investigation.</>}</div> :
+        {!investigationResult ? <div role={investigatingId ? 'status' : undefined} className="p-6 text-center text-sm text-slate-500">{investigatingId ? <><Sparkles className="mx-auto mb-3 h-6 w-6 animate-pulse text-indigo-600" />Analyzing waste history…</> : <><Search className="mx-auto mb-3 h-6 w-6" />Analyze any waste entry to review its full history.</>}</div> :
           <div className="space-y-4 p-5">
-            {investigationResult.analysis_source === 'deterministic' && <div role="status" className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Gemini is temporarily unavailable. This result uses a deterministic fallback and does not verify changes in demand.</div>}
-            <div><h3 className="font-bold text-slate-800">{investigationResult.target_item_name}</h3><p className="text-sm text-slate-600">{investigationResult.investigation_summary}</p><p className="mt-1 text-sm font-medium">Risk: ₹{investigationResult.financial_risk_inr.toLocaleString()}</p></div>
-            <div className="rounded bg-slate-50 p-3"><h4 className="mb-1 flex items-center text-sm font-semibold"><CheckCircle className="mr-1 h-4 w-4 text-emerald-600" />Verified facts</h4><ul className="list-inside list-disc text-sm text-slate-600">{investigationResult.verified_facts.map((fact, index) => <li key={index}>{fact}</li>)}</ul></div>
-            <div className="rounded bg-amber-50 p-3"><h4 className="mb-1 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1 h-4 w-4 text-amber-600" />Hypotheses</h4><ul className="list-inside list-disc text-sm text-amber-800">{investigationResult.hypotheses.map((hypothesis, index) => <li key={index}>{hypothesis}</li>)}</ul></div>
-            {investigationResult.data_gaps.length > 0 && <p className="text-xs text-slate-500">Data gaps: {investigationResult.data_gaps.join('; ')}</p>}
-            <div><h4 className="mb-2 text-sm font-semibold">Proposed interventions</h4><div className="space-y-2">{investigationResult.recommended_interventions.map((intervention) => <div key={intervention.intervention_id} className="rounded border p-3"><p className="text-sm font-medium">{intervention.title}</p><p className="my-1 text-xs text-slate-500">{intervention.details}</p><button onClick={() => void approve(intervention.intervention_id)} className="w-full rounded bg-slate-800 py-1.5 text-xs font-medium text-white">Record approval</button></div>)}</div></div>
+            <div><h3 className="font-bold text-slate-800">{investigationResult.target_item_name}</h3><p className="text-xs text-slate-500">{investigationResult.analysis_source === 'gemini' ? 'Gemini suggestions' : 'Suggestions based on recorded waste data'}</p></div>
+            <section className="rounded bg-slate-50 p-3"><h4 className="text-sm font-semibold text-slate-800">1. Waste frequency and total to date</h4><p className="mt-1 text-sm text-slate-600">Recorded {investigationResult.waste_frequency_count} {investigationResult.waste_frequency_count === 1 ? 'time' : 'times'}.</p>{Object.entries(investigationResult.total_waste_by_unit).length ? <ul className="mt-1 list-inside list-disc text-sm text-slate-600">{Object.entries(investigationResult.total_waste_by_unit).map(([unit, quantity]) => <li key={unit}>{quantity} {unit} total waste</li>)}</ul> : <p className="mt-1 text-sm text-slate-500">No quantities are available in the matching records.</p>}</section>
+            <section className="rounded bg-slate-50 p-3"><h4 className="text-sm font-semibold text-slate-800">2. Most common reasons</h4>{investigationResult.common_waste_reasons.length ? <ul className="mt-1 list-inside list-disc text-sm text-slate-600">{investigationResult.common_waste_reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p className="mt-1 text-sm text-slate-500">No waste reasons have been recorded.</p>}</section>
+            <section className="rounded bg-slate-50 p-3"><h4 className="text-sm font-semibold text-slate-800">3. Suggestions to minimize waste</h4><ul className="mt-1 list-inside list-disc text-sm text-slate-600">{investigationResult.waste_reduction_suggestions.map((suggestion, index) => <li key={`${index}-${suggestion}`}>{suggestion}</li>)}</ul></section>
           </div>}
       </section>
-    </div>
+    </div>}
   </div>;
 }

@@ -1,4 +1,4 @@
-"""Seed clearly labeled synthetic sample data for SustainBite."""
+"""Seed generated operational records for SustainBite."""
 
 import os
 import sys
@@ -32,59 +32,12 @@ INVENTORY_SEED = [
     {"id": "inv_banana_yellow", "item_name": "Banana Yellow", "category": "Produce", "brand": "Local Mandi", "storage_location": "Kitchen Line / Prep Station", "unit_cost_inr": 50.0, "base_unit": "kg", "total_current_quantity": 10.0, "reorder_threshold": 5.0, "safety_stock": 2.0, "shelf_life_days": 4, "yield_percentage": -35.0, "yield_stage": "peeled"}
 ]
 
-GLOBAL_CHARITIES = [
-    {
-        "id": "charity_robin_hood_army",
-        "name": "Robin Hood Army - Pune Chapter",
-        "category": "Volunteer Food Rescue",
-        "contact_person": "Karan V.",
-        "phone": "+91 98230 11223",
-        "service_areas": ["Kharadi", "Viman Nagar", "Kalyani Nagar"],
-        "accepts_cooked_food": True,
-        "requires_cold_chain": False,
-        "operating_hours": "18:00 - 23:30",
-        "verified": False,
-        "synthetic_sample_data": True,
-    },
-    {
-        "id": "charity_feeding_india",
-        "name": "Feeding India (Zomato Giving)",
-        "category": "Registered NGO",
-        "contact_person": "Rhea Sen",
-        "phone": "+91 98765 43210",
-        "service_areas": ["Pune East", "Kharadi", "Hadapsar"],
-        "accepts_cooked_food": True,
-        "requires_cold_chain": True,
-        "operating_hours": "11:00 - 22:00",
-        "verified": False,
-        "synthetic_sample_data": True,
-    },
-    {
-        "id": "charity_savitribai_orphanage",
-        "name": "Savitribai Phule Children Shelter",
-        "category": "Orphanage / Shelter",
-        "contact_person": "Sunita Jadhav",
-        "phone": "+91 94220 98765",
-        "service_areas": ["Kharadi Bypass", "Wagholi"],
-        "accepts_cooked_food": True,
-        "requires_cold_chain": False,
-        "operating_hours": "08:00 - 20:00",
-        "verified": False,
-        "synthetic_sample_data": True,
-    }
-]
-
 def seed_database():
     now = datetime.now(timezone.utc)
     print(f"Starting seed process for restaurant: {RESTAURANT_ID}")
     print(f"Target Database Backend: {settings.DATABASE_BACKEND}")
 
-    # 1. Global Charities
-    print("-> Seeding global donation centres...")
-    for charity in GLOBAL_CHARITIES:
-        db.add_document("global_donation_centres", charity["id"], charity)
-
-    # 2. Restaurant Profile
+    # 1. Restaurant Profile
     restaurant_profile = {
         "id": RESTAURANT_ID,
         "name": "Straits Garden Kitchen",
@@ -94,7 +47,7 @@ def seed_database():
         "cuisine_type": "Pan-Asian / Japanese / Thai / Chinese",
         "timezone": "Asia/Kolkata",
         "currency": "INR",
-        "synthetic_sample_data": True,
+        "system_generated_data": True,
         "operating_shifts": [
             {"shift": "Lunch", "start": "12:00", "end": "16:00"},
             {"shift": "Dinner", "start": "19:00", "end": "23:30"}
@@ -118,7 +71,7 @@ def seed_database():
             "current_quantity_in_store": round(item["total_current_quantity"] * 0.7, 2),
             "current_quantity_in_use": round(item["total_current_quantity"] * 0.3, 2),
             "status": "in_stock",
-            "synthetic_sample_data": True,
+            "system_generated_data": True,
             "yield_factor": 0.85 if item["category"] in ["Meat & Poultry", "Seafood"] else 1.0,
             "yield_type": (
                 "negative" if item["yield_percentage"] < 0 else
@@ -145,7 +98,6 @@ def seed_database():
     
     total_waste_records = 0
     total_staff_meal_records = 0
-    total_donation_records = 0
     total_buffet_plans = 0
 
     # Iterating week by week / periodic events across past 365 days
@@ -174,7 +126,7 @@ def seed_database():
                 "checked_by": random.choice(CHEFS),
                 "financial_loss_inr": loss_inr,
                 "status": "VERIFIED",
-                "synthetic_sample_data": True,
+                "system_generated_data": True,
                 "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/waste_records", waste_id, waste_doc)
@@ -201,7 +153,7 @@ def seed_database():
                 ],
                 "total_cost_inr": round((rice_qty * 160.0) + (chicken_or_veg_qty * 280.0), 2),
                 "deducted_from_inventory": True,
-                "synthetic_sample_data": True,
+                "system_generated_data": True,
                 "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/staff_meal_records", meal_id, staff_doc)
@@ -223,44 +175,18 @@ def seed_database():
                     {"dish_name": "Thai Green Curry", "base_demand": round(covers * 0.18, 2), "cook_batches": 3, "total_prep": round(covers * 0.198, 2)},
                     {"dish_name": "Wok Tossed Noodles", "base_demand": round(covers * 0.14, 2), "cook_batches": 2, "total_prep": round(covers * 0.154, 2)}
                 ],
-                    "synthetic_sample_data": True,
+                    "system_generated_data": True,
                     "created_at": current_dt.isoformat()
             }
             db.add_document(f"restaurants/{RESTAURANT_ID}/buffet_plans", plan_id, buffet_doc)
             total_buffet_plans += 1
 
-        # D. Surplus Food Donations: ~1-2 times every fortnight (Sunday nights after heavy buffets)
-        if day_of_week == 6 and (day_offset % 14 == 0):
-            donation_id = f"don_{day_offset}_{str(uuid.uuid4())[:8]}"
-            charity = random.choice(GLOBAL_CHARITIES)
-            donated_qty = round(random.uniform(5.0, 18.0), 1)
-            
-            don_doc = {
-                "id": donation_id,
-                "restaurant_id": RESTAURANT_ID,
-                "date": record_date,
-                "centre_id": charity["id"],
-                "centre_name": charity["name"],
-                "item_name": "Surplus Buffet Rice & Noodles",
-                "quantity_kg": donated_qty,
-                "meals_equivalent": int(donated_qty * 3.5),
-                "driver_name": "Ramesh Kumar (Volunteer)",
-                "food_temperature_celsius": 68.5,
-                "handover_status": "COMPLETED",
-                "synthetic_sample_data": True,
-                "created_at": current_dt.isoformat()
-            }
-            db.add_document(f"restaurants/{RESTAURANT_ID}/donation_records", donation_id, don_doc)
-            total_donation_records += 1
-
     print("\n[SUCCESS] Seed process completed successfully!")
     print(f"Summary of Records Created for [{RESTAURANT_ID}]:")
     print(f" - Inventory Items:       {len(INVENTORY_SEED)}")
-    print(f" - Global Charities:      {len(GLOBAL_CHARITIES)}")
     print(f" - Waste Records:         {total_waste_records}")
     print(f" - Staff Meal Logs:       {total_staff_meal_records}")
     print(f" - Buffet Plans:          {total_buffet_plans}")
-    print(f" - Food Donation Records: {total_donation_records}")
 
 if __name__ == "__main__":
     seed_database()

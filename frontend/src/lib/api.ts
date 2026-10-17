@@ -207,6 +207,24 @@ export interface StaffConsumption {
   source_reference?: string | null;
 }
 
+export interface StaffMealRecord {
+  id: string;
+  date: string;
+  shift: string;
+  staff_on_shift_count: number;
+  prepared_by: string;
+  verified_by_duty_manager: string;
+  items: Array<{
+    ingredient_name: string;
+    inventory_item_id?: string | null;
+    quantity: number;
+    unit: string;
+    remarks?: string | null;
+  }>;
+  total_cost_inr: number;
+  deducted_from_inventory: boolean;
+}
+
 export interface WasteRecordV2 {
   waste_record_id: string;
   waste_date: string;
@@ -229,7 +247,7 @@ export interface RestaurantProfile {
   address: string;
   timezone: string;
   currency: string;
-  synthetic_sample_data?: boolean;
+  system_generated_data?: boolean;
 }
 
 export interface WasteRecord {
@@ -352,32 +370,9 @@ export interface BuffetRecommendation {
   confidence: string;
 }
 
-export interface DonationMatch {
-  centre: {
-    id: string;
-    name: string;
-    contact_person?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    latitude?: number | null;
-    longitude?: number | null;
-    accepts_cooked_food?: boolean | null;
-    accepts_raw_produce?: boolean | null;
-    requires_cold_chain?: boolean | null;
-    minimum_quantity_kg?: number | null;
-    pickup_service_available?: boolean | null;
-    google_maps_link?: string | null;
-    opening_hours?: string | null;
-    accepts_vegetarian?: boolean | null;
-    accepts_non_vegetarian?: boolean | null;
-    website_url?: string | null;
-    source_urls: string[];
-    verified: boolean;
-  };
-  match_score: number;
-  distance_km: number | null;
-  eligibility_notes: string[];
-  is_eligible: boolean;
+export interface DonationCentreSuggestion {
+  name: string;
+  location: string;
 }
 
 export interface Intervention {
@@ -394,6 +389,10 @@ export interface Investigation {
   target_item_name: string;
   analysis_source: 'gemini' | 'deterministic';
   investigation_summary: string;
+  waste_frequency_count: number;
+  total_waste_by_unit: Record<string, number>;
+  common_waste_reasons: string[];
+  waste_reduction_suggestions: string[];
   verified_facts: string[];
   hypotheses: string[];
   data_gaps: string[];

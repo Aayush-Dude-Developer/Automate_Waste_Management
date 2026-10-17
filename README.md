@@ -9,16 +9,14 @@ AI-powered food waste management and inventory optimization application.
 - `docs/`: Comprehensive system architecture, schema, and API contracts.
 
 The frontend pages now call the backend for inventory, analytics, planning,
-waste, donations, handovers, and document-import APIs. The configured sample
+waste, donations, handovers, and document-import APIs. The configured
 restaurant profile is Straits Garden Kitchen in Kharadi, Pune, India.
-Seeded/generated operational records are explicitly marked as synthetic sample
-data and shown with a notice in the application; they are not verified live
-restaurant records. Document uploads use
+Seeded/generated operational records retain an internal system-generated
+provenance marker; they are not verified live restaurant records. Document uploads use
 Gemini to extract a reviewable preview from supported PDF, image, CSV, and text
 files; imports are only written after explicit confirmation. Document
 extraction requires `GEMINI_API_KEY`; if Gemini is temporarily unavailable,
 the upload reports that the document was not extracted and can be retried.
-Some backend donation matching data is still seeded/demo data.
 
 ## 2. Environment Setup
 
@@ -31,6 +29,10 @@ not required in this mode; the frontend and backend allow local API requests
 without Firebase credentials. Do not expose this development configuration as
 a public service. Add `GEMINI_API_KEY` to enable Gemini features. Document
 uploads return a clear configuration error when the key is missing.
+Donation centre suggestions always use Gemini's existing knowledge without
+Google Search grounding or Google Maps. Gemini is instructed not to guess centre
+names or locations and to return no results when it is uncertain. Set
+`GEMINI_API_KEY` in the backend environment to enable this feature.
 
 The backend is configured to use the shared Firestore project. Each developer
 must have Google Cloud access to that project and run

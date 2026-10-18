@@ -5,6 +5,7 @@ from ..repositories.database import db
 from ..schemas.waste import WasteRecordCreate, WasteRecordResponse, StaffMealRecordCreate, StaffMealRecordResponse
 from ..schemas.inventory import StockMovementCreate
 from .inventory_service import get_inventory_item, record_stock_movement
+from .stock_service import convert_quantity
 
 def log_waste_record(restaurant_id: str, waste: WasteRecordCreate) -> WasteRecordResponse:
     waste_id = f"wst_{uuid.uuid4().hex[:12]}"
@@ -16,7 +17,9 @@ def log_waste_record(restaurant_id: str, waste: WasteRecordCreate) -> WasteRecor
     if waste.inventory_item_id:
         item = get_inventory_item(restaurant_id, waste.inventory_item_id)
         if item:
-            financial_loss_inr = waste.quantity * item.unit_cost_inr
+            stock_unit = item.input_unit or item.base_unit
+            stock_quantity = convert_quantity(waste.quantity, waste.unit, stock_unit)
+            financial_loss_inr = stock_quantity * (item.unit_cost or item.unit_cost_inr)
             # Automatically create a negative stock movement
             movement = StockMovementCreate(
                 item_id=waste.inventory_item_id,
@@ -53,7 +56,9 @@ def log_staff_meal(restaurant_id: str, meal: StaffMealRecordCreate) -> StaffMeal
         if ingredient.inventory_item_id:
             item = get_inventory_item(restaurant_id, ingredient.inventory_item_id)
             if item:
-                total_cost_inr += ingredient.quantity * item.unit_cost_inr
+                stock_unit = item.input_unit or item.base_unit
+                stock_quantity = convert_quantity(ingredient.quantity, ingredient.unit, stock_unit)
+                total_cost_inr += stock_quantity * (item.unit_cost or item.unit_cost_inr)
                 
                 # Automatically create a negative stock movement
                 movement = StockMovementCreate(
@@ -80,12 +85,26 @@ def log_staff_meal(restaurant_id: str, meal: StaffMealRecordCreate) -> StaffMeal
     
     return StaffMealRecordResponse(**doc_data)
 
-def get_waste_records(restaurant_id: str) -> List[WasteRecordResponse]:
+def get_waste_records(
+    restaurant_id: str,
+    limit: int | None = None,
+) -> List[WasteRecordResponse]:
     collection_path = f"restaurants/{restaurant_id}/waste_records"
-    docs = db.get_collection(collection_path)
+    docs = db.query_collection(
+        collection_path,
+        order_by=("date", "DESCENDING") if limit else None,
+        limit=limit,
+    )
     return [WasteRecordResponse(**doc) for doc in docs]
 
-def get_staff_meal_records(restaurant_id: str) -> List[StaffMealRecordResponse]:
+def get_staff_meal_records(
+    restaurant_id: str,
+    limit: int | None = None,
+) -> List[StaffMealRecordResponse]:
     collection_path = f"restaurants/{restaurant_id}/staff_meal_records"
-    docs = db.get_collection(collection_path)
+    docs = db.query_collection(
+        collection_path,
+        order_by=("date", "DESCENDING") if limit else None,
+        limit=limit,
+    )
     return [StaffMealRecordResponse(**doc) for doc in docs]

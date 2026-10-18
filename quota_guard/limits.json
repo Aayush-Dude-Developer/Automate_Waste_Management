@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Firestore document reads",
+    "metric_type": "firestore.googleapis.com/document/read_count",
+    "resource_type": "firestore_instance",
+    "limit": 50000,
+    "unit": "reads per day",
+    "period": "day"
+  },
+  {
+    "name": "Firestore document writes",
+    "metric_type": "firestore.googleapis.com/document/write_count",
+    "resource_type": "firestore_instance",
+    "limit": 20000,
+    "unit": "writes per day",
+    "period": "day"
+  },
+  {
+    "name": "Firestore document deletes",
+    "metric_type": "firestore.googleapis.com/document/delete_count",
+    "resource_type": "firestore_instance",
+    "limit": 20000,
+    "unit": "deletes per day",
+    "period": "day"
+  },
+  {
+    "name": "Cloud Run requests for sustainbite-api",
+    "metric_type": "run.googleapis.com/request_count",
+    "resource_type": "cloud_run_revision",
+    "filter": "resource.labels.service_name = \"sustainbite-api\"",
+    "limit": 2000000,
+    "unit": "requests per month",
+    "period": "month"
+  }
+]

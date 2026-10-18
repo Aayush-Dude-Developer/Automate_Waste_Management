@@ -1,36 +1,17 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import Optional
 from datetime import datetime
 
-class DonationCentreBase(BaseModel):
-    name: str
-    contact_person: str
-    phone: str
-    address: str
-    latitude: float
-    longitude: float
-    accepts_cooked_food: bool
-    accepts_raw_produce: bool
-    requires_cold_chain: bool
-    minimum_quantity_kg: float
-    pickup_service_available: bool
+class DonationSearchRequest(BaseModel):
+    query: str = Field(min_length=3, max_length=200)
 
-class DonationCentre(DonationCentreBase):
-    id: str
-    verified: bool
 
-class MatchRequest(BaseModel):
-    item_name: str
-    quantity_kg: float
-    is_cooked: bool
-    requires_cold_chain: bool
+class DonationCentreSuggestion(BaseModel):
+    model_config = {"str_strip_whitespace": True}
 
-class MatchResult(BaseModel):
-    centre: DonationCentre
-    match_score: int
-    distance_km: float
-    eligibility_notes: List[str]
-    is_eligible: bool
+    name: str = Field(min_length=1, max_length=200)
+    location: str = Field(min_length=1, max_length=200)
+
 
 class HandoverRecord(BaseModel):
     item_name: str

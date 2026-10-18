@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from ..auth import get_restaurant_id
 from ..schemas.ai import InvestigationRequest, SurplusInvestigationResponse, ActionApprovalRequest
 from ..agents.investigation_agent import run_surplus_investigation
 from ..repositories.database import db
@@ -9,17 +10,17 @@ router = APIRouter(prefix="/api/ai", tags=["Agentic AI"])
 @router.post("/investigate-surplus", response_model=SurplusInvestigationResponse)
 def investigate_surplus(
     request: InvestigationRequest,
-    x_restaurant_id: str = Header(default="taiken_kharadi")
+    restaurant_id: str = Depends(get_restaurant_id)
 ):
-    return run_surplus_investigation(x_restaurant_id, request.target_item_id, request.target_item_name)
+    return run_surplus_investigation(restaurant_id, request.target_item_id, request.target_item_name)
 
 @router.post("/investigations/{investigation_id}/approve-action")
 def approve_action(
     investigation_id: str,
     request: ActionApprovalRequest,
-    x_restaurant_id: str = Header(default="taiken_kharadi")
+    restaurant_id: str = Depends(get_restaurant_id)
 ):
-    collection_path = f"restaurants/{x_restaurant_id}/ai_investigations"
+    collection_path = f"restaurants/{restaurant_id}/ai_investigations"
     inv = db.get_document(collection_path, investigation_id)
     if not inv:
         raise HTTPException(status_code=404, detail="Investigation not found")

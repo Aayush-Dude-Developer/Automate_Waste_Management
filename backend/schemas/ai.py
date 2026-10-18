@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
 class InterventionProposal(BaseModel):
@@ -14,7 +14,12 @@ class InterventionProposal(BaseModel):
 class SurplusInvestigationResponse(BaseModel):
     id: str
     target_item_name: str
+    analysis_source: Literal["gemini", "deterministic"] = "deterministic"
     investigation_summary: str
+    waste_frequency_count: int = 0
+    total_waste_by_unit: Dict[str, float] = Field(default_factory=dict)
+    common_waste_reasons: List[str] = Field(default_factory=list)
+    waste_reduction_suggestions: List[str] = Field(default_factory=list)
     verified_facts: List[str]
     hypotheses: List[str]
     data_gaps: List[str]

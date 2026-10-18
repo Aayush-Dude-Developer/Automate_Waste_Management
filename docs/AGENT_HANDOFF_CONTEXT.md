@@ -12,7 +12,7 @@ Welcome to the **SustainBite / Taiken Ops** codebase. This document is specifica
   * **Gemini 2.5** is used *only* for:
     1. Multimodal OCR/document extraction from unstructured restaurant sheets.
     2. Contextual root-cause investigation of surplus risk via backend tool calling.
-    3. Live dynamic discovery of verified NGOs/food banks using Google Search Grounding.
+    3. Donation-centre suggestions from Gemini's existing knowledge (without live grounding).
 
 ---
 
@@ -38,7 +38,7 @@ Automate_Waste_Management/
 │   │   ├── waste.py              # POST /api/waste & /api/staff-meals
 │   │   ├── planning.py           # POST /api/planning/replenishment & /buffet
 │   │   ├── ai.py                 # POST /api/ai/investigate-surplus & /approve-action
-│   │   ├── donations.py          # POST /api/donations/match & /handover
+│   │   ├── donations.py          # POST /api/donations/search & /handover
 │   │   ├── documents.py          # POST /api/documents/upload & /confirm-import
 │   │   └── analytics.py          # GET /api/analytics/dashboard
 │   ├── engines/                  # Deterministic mathematical models (NO AI)

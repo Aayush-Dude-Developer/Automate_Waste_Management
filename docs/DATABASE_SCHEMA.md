@@ -16,6 +16,7 @@ All operational collections are subcollections of the top-level `restaurants` co
     ├── purchase_records/{purchase_id}
     ├── suppliers/{supplier_id}
     ├── buffet_plans/{plan_id}
+    ├── purchase_recommendations/{recommendation_id}
     ├── ai_investigations/{investigation_id}
     ├── recommendations/{recommendation_id}
     ├── donation_records/{donation_id}
@@ -25,14 +26,185 @@ All operational collections are subcollections of the top-level `restaurants` co
 /global_donation_centres/{centre_id}  (Shared verified charity directory, read-only for tenants)
 ```
 
+### 2.0 Stock control, purchasing, recipes, and sales
+
+Operational quantity fields use each ingredient's `input_unit` (legacy alias: `base_unit`).
+The document store uses stable document IDs and `ingredient_id` aliases instead of relational
+DDL; references below are tenant-scoped IDs. Existing documents are retained and new fields
+are additive. There is no SQL migration or database reset.
+
+#### `inventory_items/{ingredient_id}`
+- `ingredient_id` (string): same stable identifier as document `id`
+- `item_name`, `yield_percentage` (signed; greater than -100), `yield_type`
+  (`negative`, `positive`, `no change`), `yield_stage`
+- `yield_stages` (ordered array): `stage_name`, `input_stage`, `output_stage`,
+  `input_unit`, `output_unit`, `yield_percentage`; supports multiple preparation steps
+- `input_unit`, `output_unit` (unit strings; `base_unit` remains supported)
+- `unit_cost` (input-unit price; legacy alias `unit_cost_inr`)
+- `stock_in_store`, `stock_in_use` (legacy aliases:
+  `current_quantity_in_store`, `current_quantity_in_use`)
+- `reorder_threshold`, `safety_stock`, `supplier_id`, `lead_time_days`
+- Existing category, location, SKU, brand, shelf-life, status, tenant, and timestamp
+  fields remain supported.
+
+Yield conversion follows
+`output = input * (1 + yield_percentage / 100)`. For each applicable preparation step,
+convert required output quantity back by dividing by `1 + yield_percentage / 100`.
+The steps are applied once in reverse order only when a recipe stage differs from raw
+stock stage. Unit conversions are explicit for mass, volume, and count; incompatible or
+unknown units are rejected rather than guessed.
+
+#### `monthly_stock_balances/{ingredient_id}_{YYYY-MM}`
+- `ingredient_id`, `month` (YYYY-MM), `opening_stock`
+- `total_purchased_stock`, `total_recipe_consumption`, `total_staff_consumption`,
+  `total_wasted_stock`, `other_stock_inflows`, `other_stock_outflows`
+- `calculated_closing_stock`, `actual_closing_stock`, `stock_variance`
+- `physical_count_verified`, `provisional`, verifier and verification timestamp
+
+The calculated closing balance is opening + purchases + other inflows - recipe
+consumption - staff consumption - waste - other outflows, aggregated from the stock
+movement ledger. Physical counts are entered separately; variance is actual minus
+calculated. A verified prior-month physical count carries forward as opening. Otherwise
+the previous calculated close carries forward with a provisional flag.
+
+#### `purchase_invoices/{purchase_id}` and `purchase_lines/{purchase_line_id}`
+- Invoice: `purchase_id`, `supplier_id`, `invoice_number`, `invoice_date`,
+  `received_date`, `total_amount`, `bill_document_url`, `verification_status`
+- Line: `purchase_line_id`, `purchase_id`, `ingredient_id`, `quantity_purchased`,
+  `purchase_unit`, `unit_price`, `quantity_received`, `expiry_date`, `batch_number`,
+  `usable_quantity`, `usable_unit` (the ingredient input unit),
+  `remaining_usable_quantity` (verified stock remaining in that batch)
+- Each line/batch is independently recorded; unique invoice IDs derive from normalized
+  supplier and invoice number. Stock is posted only after verification, in received
+  quantities converted to the ingredient input unit. Deterministic ledger references
+  prevent repeat verification from adding stock again.
+- Inventory documents may opt into `lot_tracking_enabled`. Purchase verification
+  initializes each received line's remaining balance. Sales, staff consumption, waste,
+  and manual stock deductions allocate to verified, unexpired lots by earliest expiry;
+  expired stock is excluded from usable stock and must be recorded as a write-off.
+  Positive manual adjustments are kept separately as `untracked_stock_quantity` and
+  surfaced as not expiry-adjusted. Legacy inventory without lot tracking continues to
+  use its aggregate quantity and is explicitly warned about by the recommendation API.
+
+#### `recipes/{recipe_id}` and `recipe_ingredients/{row_id}`
+- Recipe: `recipe_id`, `recipe_name`, `recipe_version`, `serving_size`, `serving_unit`,
+  `menu_category`, `selling_price`, `is_active`
+- Ingredient row: `recipe_id`, `ingredient_id`, `required_quantity`, `required_unit`,
+  `required_stage`, `yield_stage_reference`, `servings_per_batch`
+- Multiple rows support multiple ingredients and reuse across recipes.
+
+#### `purchase_recommendations/{recommendation_id}`
+- Deterministic ID from forecast start date, forecast period, and ingredient ID.
+- Stores approval/order/receipt state, forecast key, recommended purchase quantity,
+  order reference, expected delivery date, and an optional verified purchase-line link.
+- Only `ordered` records with an expected delivery date contribute incoming stock;
+  verification and actual inventory posting continue to use the purchase invoice flow.
+- Forecast quantities are estimates from up to 56 days of weekday-specific net recipe
+  sales, bounded recent trend, recipe batch servings, and configured yields. Forecast
+  records never replace actual sales, stock movements, waste, or staff consumption.
+
+#### `daily_sales/{sale_record_id}`, `staff_consumptions/{consumption_id}`,
+and `waste_records_v2/{waste_record_id}`
+- Sales keep sale date, recipe, sold/cancelled/net quantities, optional actually-prepared
+  quantity, net sales amount, and source. Stock movements use prepared quantity when
+  provided; otherwise net sold quantity. The theoretical-consumption report always uses
+  net sold portions.
+- Staff consumption can be direct ingredient quantity or recipe portions; each saved
+  record creates one set of raw-unit movements.
+- Waste stores date, ingredient, quantity/unit, reason, stage, estimated cost, recorder,
+  optional recipe, and raw-vs-prepared type. Raw waste posts a stock movement; prepared
+  food surplus is informational to prevent deducting its raw ingredients twice.
+
+These documents are available through `/api/purchases`, `/api/recipes`, `/api/sales`,
+`/api/staff-consumptions`, `/api/stock/waste-records`, `/api/stock-balances/{YYYY-MM}`,
+and `/api/theoretical-consumption/{YYYY-MM}`. No live Firestore data is changed by adding
+these schemas and endpoints.
+
+### Purchase recommendation data generation
+
+`backend/seed_purchase_demo.py` creates a deterministic, isolated generated dataset for
+`taiken_kharadi`: six ingredients with explicit supplier lead times/MOQs/pack
+sizes and yields, verified dated batch invoices, three recipes, and 56 days of net
+weekday-varied sales. Records carry a system-generated provenance marker; do not use them for
+operational purchasing, accounting, or food safety decisions. The generated dataset includes one
+expired tomato lot to demonstrate the exclusion and write-off warning. It only writes
+the generated record IDs and a seed metadata marker; it does not overwrite existing
+operational IDs. Re-running on the same history-through date performs no writes.
+
+From the repository root, preview the number of documents without writing:
+
+```powershell
+.\backend\.venv_312\Scripts\python.exe -m backend.seed_purchase_demo --restaurant-id taiken_kharadi
+```
+
+To write the synthetic records, set `DATABASE_BACKEND=firestore` and
+`GOOGLE_CLOUD_PROJECT` in the environment, then explicitly run:
+
+```powershell
+.\backend\.venv_312\Scripts\python.exe -m backend.seed_purchase_demo --restaurant-id taiken_kharadi --apply
+```
+
+The batch balances sum to each inventory item's recorded total on hand;
+the recommendations count only non-expired batch balances plus separately identified
+untracked stock. This additive Firestore document model requires no SQL migration.
+
+To normalize legacy generated labels and IDs in stored table records, first preview the
+configured restaurant and shared donation-centres collection with:
+
+```powershell
+.\backend\.venv_312\Scripts\python.exe -m backend.migrations.rename_demo_metadata
+```
+
+Apply the changes by adding `--apply`. The migration updates references along with
+document IDs and aborts before writing if a rename would collide with a different
+record.
+
+For existing inventory documents, preview the additive alias/default migration from the
+repository root with:
+
+```powershell
+.\backend\.venv_312\Scripts\python.exe -m backend.migrations.migrate_stock_schema --restaurant-id taiken_kharadi
+```
+
+The migration assigns **illustrative**, not measured, yields to the built-in sample
+ingredients (for example rice +100% at cooked, chicken -15% at trimmed); items without a
+sample mapping default to 0% / no change. Review the preview and adjust actual kitchen
+yields before relying on those values for purchasing or theoretical-consumption decisions.
+The migration preserves inventory balances, other profile fields, and the existing
+currency, and records `restaurant_yield_sg_v1`. Add `--restaurant-profile` to preview and
+apply the requested India restaurant name and location. To persist after reviewing
+the output, add `--apply`. Back up the Firestore project before applying changes.
+
+### Firestore operation usage
+
+Dashboard requests read only the recent two-week waste window and use Firestore count
+aggregations for inventory risk, pending investigations, and handovers. The seven-day
+chart is included in the dashboard response, avoiding a second request. Recipe and
+purchase-line lookups, sales-source checks, and monthly movements are filtered in
+Firestore rather than downloading whole unrelated collections. Monthly balance reads
+calculate results without writing them; only a physical stocktake persists a balance.
+The frontend coalesces concurrent GETs and caches successful GET results in memory for
+30 seconds, clearing that cache when any mutation is sent.
+Operational waste, staff-consumption, purchase, and sales screens request only the most
+recent 100 records using server-side ordered limits. Their list endpoints retain the
+unlimited default for compatibility; the impact-report screen previews 100 records and
+loads full history only when the user explicitly exports the report.
+
+Stock ledger and inventory writes remain separate durable documents because the ledger
+is the audit trail and inventory is the current balance. This code can reduce operations,
+but it cannot guarantee staying within Firebase's daily free quota: actual usage depends
+on traffic, dataset size, other Firebase products, and deployed clients. Monitor Firestore
+usage and billing in the Google Cloud/Firebase console.
+
 ---
 
 ## 2. Collection Schemas & Field Definitions
 
 ### 2.1 `restaurants`
 - `id` (string, UUID): e.g. `"taiken_kharadi"`
-- `name` (string): `"Taiken Pan Asian"`
-- `outlet_name` (string): `"Kharadi Outlet"`
+- `name` (string): `"Straits Garden Kitchen"`
+- `outlet_name` (string): `"Kharadi"`
+- `location` / `address` (string): `"Kharadi, Pune, India"`
 - `company_name` (string): `"Culinary Divergence Pvt. Ltd."`
 - `cuisine_type` (string): `"Pan-Asian / Japanese / Thai / Chinese"`
 - `timezone` (string): `"Asia/Kolkata"`

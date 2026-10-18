@@ -1,23 +1,33 @@
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
-from ..schemas.donations import MatchRequest, MatchResult, HandoverRecord, HandoverResponse
+from ..auth import get_restaurant_id, get_current_user
+from ..schemas.donations import (
+    DonationCentreSuggestion,
+    DonationSearchRequest,
+    HandoverRecord,
+    HandoverResponse,
+)
 from ..services import donation_service
 
 router = APIRouter(prefix="/api/donations", tags=["Donations"])
 
-@router.post("/match", response_model=List[MatchResult])
-def get_donation_matches(
-    request: MatchRequest,
-    lat: float = Query(18.5515), # Default to Taiken Kharadi lat
-    lon: float = Query(73.9348),  # Default to Taiken Kharadi lon
-    use_ai: bool = Query(False),
-    location_name: str = Query("Pune")
-):
-    return donation_service.find_matches(request, lat, lon, use_ai_discovery=use_ai, location_name=location_name)
+@router.post("/search", response_model=List[DonationCentreSuggestion], dependencies=[Depends(get_current_user)])
+def search_donation_centres(request: DonationSearchRequest):
+    try:
+        return donation_service.search_donation_centres(request.query)
+    except donation_service.DonationSearchError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
 
 @router.post("/handover", response_model=HandoverResponse)
 def log_donation_handover(
     handover: HandoverRecord,
-    x_restaurant_id: str = Header(default="taiken_kharadi")
+    restaurant_id: str = Depends(get_restaurant_id)
 ):
-    return donation_service.record_handover(x_restaurant_id, handover)
+    return donation_service.record_handover(restaurant_id, handover)
+
+@router.get("/handovers", response_model=List[HandoverResponse])
+def get_donation_handovers(
+    limit: int | None = Query(default=None, ge=1, le=500),
+    restaurant_id: str = Depends(get_restaurant_id),
+):
+    return donation_service.get_handovers(restaurant_id, limit)

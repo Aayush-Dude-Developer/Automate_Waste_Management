@@ -27,14 +27,31 @@ Credentials:
    gcloud auth application-default login
    ```
 
+The Firestore database in project `automate-511215` was preserved when the
+deployed app was shut down, but project billing was unlinked. Connecting to
+that Firestore database may fail until a project owner with billing
+permissions links a billing account again. Re-enabling billing can incur
+Google Cloud charges; check the current pricing and billing settings first.
+The new laptop's Google account must also be granted access to the project and
+Firestore. Billing and IAM permissions cannot be obtained from this
+repository.
+
+To run without Google Cloud access or charges, copy `.env.example` to the
+repository root `.env` and set `DATABASE_BACKEND=local`. This uses a local JSON
+database instead of the shared Firestore database; local records are not
+synced between laptops.
+
 To test Google sign-in locally, configure a Firebase web app and Google
 Authentication provider, put its public web settings in `frontend/.env.local`
 (see `frontend/.env.example`), and set your account in `ALLOWED_USER_EMAILS`.
 Otherwise, leave Firebase web settings unconfigured for local development.
 
-Create a Gemini API key in Google AI Studio. Put it in the root `.env` as
+Gemini features are optional. The shutdown removed the project's
+`GEMINI_API_KEY` Secret Manager secret. To enable Gemini locally, create or use
+a Gemini API key in Google AI Studio and put it in the root `.env` as
 `GEMINI_API_KEY=your_new_key`, replacing the placeholder/empty value. Keep the
-key private and do not stage or commit `.env` after adding it.
+key private and do not stage or commit `.env` after adding it. Without a key,
+the app can use its deterministic fallback behavior.
 
 The backend loads the root `.env` when launched from the `backend` directory.
 The configured Gemini model is `gemini-3.8-flash`.

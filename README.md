@@ -37,7 +37,10 @@ names or locations and to return no results when it is uncertain. Set
 The backend is configured to use the shared Firestore project. Each developer
 must have Google Cloud access to that project and run
 `gcloud auth application-default login` locally. The code does not grant
-Firestore access by itself.
+Firestore access by itself. Project billing is currently disabled following
+the app shutdown, so Firestore access may require a project owner to relink
+billing first; this can incur Google Cloud charges. See
+[FRIEND_SETUP.md](./FRIEND_SETUP.md) for Firestore access and local-only setup.
 
 ## 3. Running the Application
 
